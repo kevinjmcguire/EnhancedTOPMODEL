@@ -1,0 +1,8 @@
+numpy
+pyproj
+shapely
+geopandas
+pynhd
+py3dep
+pydaymet
+pygeohydro
