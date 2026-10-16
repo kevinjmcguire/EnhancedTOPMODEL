@@ -173,8 +173,8 @@ a{color:var(--sim)}
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
           <h2 style="margin:0">Location and topographic index</h2>
           <div class="mapopts hint"><label class="row" for="satToggle" style="gap:5px"><input type="checkbox" id="satToggle"> Show saturated area on <span class="mono" id="satDay">–</span></label>
-            <select id="satMode" aria-label="How saturated cells are placed"><option value="net" selected>Connected to the stream</option><option value="raw">Wettest cells, ranked by TI</option></select>
-            <label class="row" for="netToggle" style="gap:5px"><input type="checkbox" id="netToggle" checked> Drainage lines</label></div>
+            <select id="satMode" aria-label="How saturated cells are placed"><option value="net" selected>Spreading up from channels</option><option value="raw">Wettest cells, ranked by TI</option></select>
+            <label class="row" for="chanSel" style="gap:5px">Channels draining ≥ <select id="chanSel" aria-label="Channel initiation area"><option value="0.1">0.1 km²</option><option value="0.25">0.25 km²</option><option value="0.5" selected>0.5 km²</option><option value="1">1 km²</option><option value="2">2 km²</option></select></label></div>
         </div>
         <div class="maps">
           <figure><svg id="usMap" role="group" aria-label="Locations of the six watersheds"></svg><figcaption class="hint">Click a dot to switch watershed.</figcaption></figure>
@@ -186,7 +186,7 @@ a{color:var(--sim)}
             </div>
             <div class="row hint" style="margin-top:6px"><button class="btn" id="followBtn" type="button">Follow hydrograph</button><span id="pinNote">Showing the hover day, or the peak flow day.</span></div></figure>
         </div>
-        <p class="note" style="margin-bottom:0">Wetter (higher index) cells saturate first. With the overlay on, the orange area holds as many cells as the model's saturated fraction on the day shown (the model tracks area by index class, not by location). <b>Connected to the stream</b> places them along drainage paths: the saturated area grows outward from the gauge, each step adding the wettest cell on its edge, with wetness = index plus a bonus for upstream area to make up for channel wetness lost when the grid was coarsened. With little saturation it follows the channels as one connected network; in wet conditions it spreads beyond them into hollows, footslopes and flat valley floors and approaches the plain index pattern. <b>Wettest cells</b> shows the plain index ranking, which breaks up because averaging to coarse cells dilutes narrow valley bottoms. Drainage lines are traced the same way (the page has no DEM), so they follow the index valleys, not mapped streams. By default the day follows the hydrograph hover, or the largest simulated flow in the evaluation window. Click the hydrograph, drag the slider or press Play to pin a day and step through time. The map is the 30 m index averaged to 90–180 m cells, so its wet tail is smoother than the classes the model uses. Hover the map for a cell's index and upstream area.</p>
+        <p class="note" style="margin-bottom:0">Wetter (higher index) cells saturate first. With the overlay on, the orange area holds as many cells as the model's saturated fraction on the day shown (the model tracks area by index class, not by location). <b>Spreading up from channels</b> keeps a fixed channel network (cells draining at least the area chosen) saturated all the time, drawn as lines, and places the model's saturated fraction on the hillslope cells above it: saturation grows upslope from the channel banks, each step taking the wettest cell (highest index) bordering the channel or the area already saturated, so wet conditions push it into hollows, footslopes and flat valley floors. <b>Wettest cells</b> shows the plain index ranking, which breaks up because averaging to coarse cells dilutes narrow valley bottoms. Channels are traced through the index grid along the wettest path to the gauge (the page has no DEM), so they follow the index valleys, not mapped streams. By default the day follows the hydrograph hover, or the largest simulated flow in the evaluation window. Click the hydrograph, drag the slider or press Play to pin a day and step through time. The map is the 30 m index averaged to 90–180 m cells, so its wet tail is smoother than the classes the model uses. Hover the map for a cell's index and upstream area.</p>
       </div>
 
       <div class="panel">
@@ -919,8 +919,8 @@ function drawMap(){
   const mh=Math.min(Math.max(Math.round((W-2*pad)*m.h/m.w),110),440);cv.style.height=(mh+2*pad+legendH)+'px';
   const{c,w,h}=setup(cv);
   const sc=Math.min((w-2*pad)/m.w,(h-legendH-2*pad)/m.h),ox=(w-m.w*sc)/2,oy=pad+((h-legendH-2*pad)-m.h*sc)/2;
-  let satLevel=null,d=satDay();const net=s.net,conn=sat&&net&&$('satMode').value==='net';let nSat=0;
-  if(conn)nSat=Math.round(S.out.satFrac[d]*net.no);
+  let satLevel=null,d=satDay();const net=s.net,HO=net?hillOrder(s):null,conn=sat&&net&&$('satMode').value==='net';let nSat=0;
+  if(conn)nSat=Math.min(Math.round(S.out.satFrac[d]*net.no),HO.nHill);
   else if(sat){const cnt=new Float64Array(31);let tot=0;for(let i=0;i<m.w*m.h;i++){const v=s.cells[i];if(v<=30){cnt[v]++;tot++;}}
     const target=S.out.satFrac[d]*tot;let cum=0,L=31;
     for(let v=30;v>=0;v--){if(cum>=target)break;const nx=cum+cnt[v];if(Math.abs(nx-target)<=Math.abs(cum-target)){cum=nx;L=v;}else break;}
@@ -930,17 +930,14 @@ function drawMap(){
   for(let i=0;i<m.w*m.h;i++){const v=s.cells[i];if(v>30)continue;const ti=cellTI(v);const isSat=!conn&&satLevel!==null&&v>=satLevel;const rgb=isSat?SATRGB:rampColor((ti-TI_LO)/(TI_HI-TI_LO));
     img.data[4*i]=rgb[0];img.data[4*i+1]=rgb[1];img.data[4*i+2]=rgb[2];img.data[4*i+3]=255;}
   ic.putImageData(img,0,0);c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';c.drawImage(off,ox,oy,m.w*sc,m.h*sc);
-  // drainage lines and connected saturated channels (cell centre to downstream cell centre)
-  if(net){const W=m.w,cx=i=>ox+((i%W)+.5)*sc,cy=i=>oy+(((i/W)|0)+.5)*sc;c.lineCap='round';
-    if($('netToggle').checked){c.strokeStyle=col('net');c.globalAlpha=.55;
-      for(let i=0;i<net.down.length;i++){const a=net.acc[i];if(a<net.thr||net.down[i]<0)continue;const j=net.down[i];
-        c.lineWidth=Math.min(Math.max(0.7,sc*0.22)*(1+0.8*Math.log10(a/net.thr)),Math.max(sc*0.9,1.5),4);c.beginPath();c.moveTo(cx(i),cy(i));c.lineTo(cx(j),cy(j));c.stroke();}
-      c.globalAlpha=1;}
+  // fixed channel network (always saturated) and variably saturated hillslope cells above it
+  if(net){const W=m.w,cx=i=>ox+((i%W)+.5)*sc,cy=i=>oy+(((i/W)|0)+.5)*sc;
     if(conn&&nSat>0){c.fillStyle=`rgb(${SATRGB})`;
-      for(let i=0;i<net.rank.length;i++){const r=net.rank[i];if(r<0||r>=nSat)continue;c.fillRect(ox+(i%W)*sc-.3,oy+((i/W)|0)*sc-.3,sc+.6,sc+.6);}
-      c.strokeStyle=`rgb(${SATRGB})`;c.lineWidth=Math.max(sc*0.55,1.4);
-      for(let i=0;i<net.down.length;i++){const j=net.down[i];if(j<0||net.rank[i]<0||net.rank[i]>=nSat||net.rank[j]>=nSat||net.acc[i]<Math.max(3,net.thr/4))continue;c.beginPath();c.moveTo(cx(i),cy(i));c.lineTo(cx(j),cy(j));c.stroke();}}
-    c.lineCap='butt';}
+      for(let i=0;i<HO.rank.length;i++){const r=HO.rank[i];if(r<0||r>=nSat)continue;c.fillRect(ox+(i%W)*sc-.3,oy+((i/W)|0)*sc-.3,sc+.6,sc+.6);}}
+    c.lineCap='round';c.strokeStyle=sat?`rgb(${SATRGB})`:col('net');c.globalAlpha=sat?1:.7;
+    for(let i=0;i<net.down.length;i++){if(!HO.chan[i]||net.down[i]<0)continue;const j=net.down[i],a=net.acc[i];
+      c.lineWidth=Math.min(Math.max(1.2,sc*0.3)*(1+0.7*Math.log10(Math.max(a/HO.thr,1))),Math.max(sc*0.95,2),5);c.beginPath();c.moveTo(cx(i),cy(i));c.lineTo(cx(j),cy(j));c.stroke();}
+    c.globalAlpha=1;c.lineCap='butt';}
   // outline
   c.strokeStyle=col('fg');c.lineWidth=1.2;c.lineJoin='round';
   for(const ring of m.outline){c.beginPath();ring.forEach((p,i)=>i?c.lineTo(ox+p[0]*sc,oy+p[1]*sc):c.moveTo(ox+p[0]*sc,oy+p[1]*sc));c.closePath();c.stroke();}
@@ -952,7 +949,7 @@ function drawMap(){
   c.fillStyle=col('muted');c.strokeStyle=col('muted');c.lineWidth=1.5;c.textAlign='center';c.textBaseline='top';c.font='11px '+getComputedStyle(document.body).getPropertyValue('--mono');
   c.beginPath();c.moveTo(w-pad-10,pad+26);c.lineTo(w-pad-10,pad+10);c.stroke();c.beginPath();c.moveTo(w-pad-14,pad+16);c.lineTo(w-pad-10,pad+10);c.lineTo(w-pad-6,pad+16);c.stroke();c.fillText('N',w-pad-10,pad+28);
   // legend strip
-  const ly=h-legendH+8,bw=Math.min(220,w*0.42);
+  const ly=h-legendH+8,bw=Math.min(200,w*0.3);
   for(let i=0;i<bw;i++){const rgb=rampColor(i/(bw-1));c.fillStyle=`rgb(${rgb})`;c.fillRect(pad+i,ly+12,1.5,10);}
   c.strokeStyle=col('line');c.lineWidth=1;c.strokeRect(pad+.5,ly+12.5,bw,10);
   c.fillStyle=col('muted');c.font='11px '+getComputedStyle(document.body).getPropertyValue('--mono');c.textBaseline='top';
@@ -960,8 +957,8 @@ function drawMap(){
   c.textAlign='left';c.fillText(String(TI_LO),pad,ly+25);c.textAlign='right';c.fillText('≥'+TI_HI,pad+bw,ly+25);
   let lx2=pad+bw+16;
   if(sat){c.fillStyle=`rgb(${SATRGB})`;c.fillRect(lx2,ly+12,10,10);c.fillStyle=col('muted');c.textAlign='left';c.fillText('saturated',lx2+14,ly+11);}
-  if(net&&$('netToggle').checked){const dx=pad+bw+16,dy=sat?ly+26:ly+12;c.strokeStyle=col('net');c.globalAlpha=.55;c.lineWidth=2;c.beginPath();c.moveTo(dx,dy+5);c.lineTo(dx+10,dy+5);c.stroke();c.globalAlpha=1;
-    c.fillStyle=col('muted');c.textAlign='left';c.fillText('drainage lines',dx+14,dy-1);}
+  if(net){const dx=pad+bw+16,dy=sat?ly+26:ly+12;c.strokeStyle=sat?`rgb(${SATRGB})`:col('net');c.globalAlpha=sat?1:.7;c.lineWidth=2;c.beginPath();c.moveTo(dx,dy+5);c.lineTo(dx+10,dy+5);c.stroke();c.globalAlpha=1;
+    c.fillStyle=col('muted');c.textAlign='left';c.fillText(sat?'channel, always wet':'channel network',dx+14,dy-1);}
   // scale bar
   let km=0.5;for(const k of[0.5,1,2,5,10,20]){if(k*1000/m.cellM*sc<=w*0.26)km=k;}
   const sp=km*1000/m.cellM*sc;c.strokeStyle=col('fg');c.fillStyle=col('fg');c.lineWidth=2;c.beginPath();c.moveTo(w-pad-sp,ly+18);c.lineTo(w-pad,ly+18);c.moveTo(w-pad-sp,ly+14);c.lineTo(w-pad-sp,ly+22);c.moveTo(w-pad,ly+14);c.lineTo(w-pad,ly+22);c.stroke();
@@ -974,11 +971,11 @@ function mapHover(e){
   if(gx<0||gy<0||gx>=m.w||gy>=m.h){return;}
   const v=s.cells[gy*m.w+gx];if(v>30){$('mapHover').textContent='Outside the watershed.';return;}
   const ti=cellTI(v),tot=s.frac.reduce((a,b)=>a+b,0);let below=0;s.val.forEach((x,i)=>{if(x<ti)below+=s.frac[i];});
-  const up=s.net?s.net.acc[gy*m.w+gx]*m.cellM*m.cellM/1e6:NaN;
-  $('mapHover').textContent=`TI ${ti.toFixed(1)} · wetter than ${(100*below/tot).toFixed(0)}% of the basin · drains ${up<1?up.toFixed(2):up.toFixed(1)} km² (cell ≈ ${m.cellM} m)`;
+  const up=s.net?s.net.acc[gy*m.w+gx]*m.cellM*m.cellM/1e6:NaN,isCh=s.net&&hillOrder(s).chan[gy*m.w+gx];
+  $('mapHover').textContent=`TI ${ti.toFixed(1)} · wetter than ${(100*below/tot).toFixed(0)}% of the basin · drains ${up<1?up.toFixed(2):up.toFixed(1)} km²${isCh?' · channel':''} (cell ≈ ${m.cellM} m)`;
 }
 $('cMap').addEventListener('pointermove',mapHover);$('cMap').addEventListener('pointerdown',mapHover);
-$('satToggle').addEventListener('change',()=>drawMap());$('satMode').addEventListener('change',()=>{$('satToggle').checked=true;drawMap();});$('netToggle').addEventListener('change',()=>drawMap());
+$('satToggle').addEventListener('change',()=>drawMap());$('satMode').addEventListener('change',()=>{$('satToggle').checked=true;drawMap();});$('chanSel').addEventListener('change',()=>drawMap());
 let mapPend=false;function schedMap(){if(mapPend)return;mapPend=true;requestAnimationFrame(()=>{mapPend=false;drawMap();});}
 
 /* ---------- hover ---------- */
@@ -1208,17 +1205,28 @@ function buildNet(s){
   for(;;){if(o0<0){for(let j=0;j<n;j++)if(c[j]<=30&&!seen[j]&&(o0<0||c[j]>c[o0]))o0=j;}if(o0<0)break;flood(o0);o0=-1;}
   const acc=new Float64Array(n);for(let k=0;k<no;k++)acc[order[k]]=1;
   for(let k=no-1;k>=0;k--){const i=order[k];if(down[i]>=0)acc[down[i]]+=acc[i];}
-  // wetting order: grow the saturated area outward from the outlet, always adding the wettest cell on its edge.
-  // Wetness = index class + log10(upstream cells), which restores some of the channel wetness lost by coarsening.
-  // Every prefix is connected; when few cells are wet it follows the channels, when many are wet it spreads
-  // into hollows, footslopes and flats beside them, approaching the plain index ranking.
-  const wet=j=>c[j]+Math.log10(acc[j]),rank=new Int32Array(n).fill(-1),done=new Uint8Array(n);let r=0;seq=0;
-  for(let j=0;j<n;j++)if(c[j]<=30&&down[j]<0){done[j]=1;push(wet(j),j);}
-  while(hk.length){const i=pop();rank[i]=r++;const y=(i/W)|0,x=i-y*W;
-    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const yy=y+dy,xx=x+dx;if(yy<0||yy>=H||xx<0||xx>=W)continue;
-      const j=yy*W+xx;if(done[j]||c[j]>30)continue;done[j]=1;push(wet(j),j);}}
-  const thr=Math.max(8,Math.round(0.5e6/(m.cellM*m.cellM)));
-  s.net={down,acc,rank,no,thr};
+  s.net={down,acc,no,orders:{}};
+}
+// Fixed channel network = cells draining at least the chosen area; it is always saturated. The model's saturated
+// fraction is placed on the hillslope cells above it: saturation grows upslope from the channel banks, always taking
+// the wettest cell (highest index) bordering the channel or the area already saturated.
+function chanKm2(){return +$('chanSel').value;}
+function hillOrder(s){
+  const net=s.net,m=s.map,W=m.w,H=m.h,c=s.cells,n=W*H,km2=chanKm2();
+  if(net.orders[km2])return net.orders[km2];
+  const thr=Math.max(3,Math.round(km2*1e6/(m.cellM*m.cellM))),chan=new Uint8Array(n);let nc=0;
+  for(let i=0;i<n;i++)if(c[i]<=30&&(net.acc[i]>=thr||net.down[i]<0)){chan[i]=1;nc++;}
+  const hk=[],hv=[];let seq=0;
+  const sw=(a,b)=>{let t=hk[a];hk[a]=hk[b];hk[b]=t;t=hv[a];hv[a]=hv[b];hv[b]=t;};
+  const push=(f,v)=>{hk.push(Math.round(f*1000)*1e6+(999999-(seq++%1e6)));hv.push(v);let j=hk.length-1;while(j>0){const p=(j-1)>>1;if(hk[p]>=hk[j])break;sw(p,j);j=p;}};
+  const pop=()=>{const v=hv[0],lk=hk.pop(),lv=hv.pop();if(hk.length){hk[0]=lk;hv[0]=lv;let j=0;
+    for(;;){const l=2*j+1,r=l+1;let b=j;if(l<hk.length&&hk[l]>hk[b])b=l;if(r<hk.length&&hk[r]>hk[b])b=r;if(b===j)break;sw(b,j);j=b;}}return v;};
+  const wet=j=>c[j]+0.3*Math.log10(net.acc[j]),done=new Uint8Array(n),rank=new Int32Array(n).fill(-1);let r=0;
+  const nb=(i,fn)=>{const y=(i/W)|0,x=i-y*W;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const yy=y+dy,xx=x+dx;if(yy<0||yy>=H||xx<0||xx>=W)continue;const j=yy*W+xx;if(c[j]<=30)fn(j);}};
+  for(let i=0;i<n;i++)if(chan[i])done[i]=1;
+  for(let i=0;i<n;i++)if(chan[i])nb(i,j=>{if(!done[j]){done[j]=1;push(wet(j),j);}});
+  while(hk.length){const i=pop();rank[i]=r++;nb(i,j=>{if(!done[j]){done[j]=1;push(wet(j),j);}});}
+  return net.orders[km2]={chan,rank,nHill:r,nc,thr};
 }
 
 /* ---------- boot ---------- */
