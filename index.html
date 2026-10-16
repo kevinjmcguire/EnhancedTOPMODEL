@@ -1229,7 +1229,7 @@ function buildNet(s){
 // Fixed channel network = cells draining at least the chosen area; it is always saturated. The model's saturated
 // fraction is placed on the hillslope cells above it: saturation grows upslope from the channel banks, always taking
 // the wettest cell (highest index) bordering the channel or the area already saturated.
-function chanKm2(){const v=$('chanSel').value;return v==='nhd'?'nhd':+v;}
+function chanKm2(){const v=$('chanSel').value;return v==='nhd'?(S.site&&nhdKm(S.site)==null?0.5:'nhd'):+v;}
 function hillOrder(s){
   const net=s.net,m=s.map,W=m.w,H=m.h,c=s.cells,n=W*H,km2=chanKm2();
   if(net.orders[km2])return net.orders[km2];

@@ -247,18 +247,42 @@ def fetch_nlcd(geom_wkt):
                 imp=imp[np.isfinite(imp) & (imp <= 100)])
 
 
+NHD_URL = 'https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer/6/query'  # NHD high-res flowlines
+
+
 def fetch_nhd_km(geom_wkt):
-    pynhd = _need('pynhd')
-    gpd = _need('geopandas')
+    """Perennial stream/river length (NHD FCODE 46006) inside the basin, km: flowlines from the National Map
+    service within the basin's bounding box, clipped to the outline and measured in EPSG:5070."""
+    import urllib.parse
+    import urllib.request
     from shapely import wkt
+    from shapely.geometry import shape
+    from shapely.ops import transform as stransform
+    from pyproj import Transformer
     g = wkt.loads(geom_wkt)
-    fl = pynhd.NHD('flowline_hr').bygeom(g, geo_crs=4326)
-    col = 'fcode' if 'fcode' in fl.columns else 'FCODE'
-    per = fl[fl[col].astype(int) == 46006]
-    if per.empty:
-        return 0.0
-    basin = gpd.GeoDataFrame(geometry=[g], crs=4326).to_crs(5070)
-    return float(per.to_crs(5070).clip(basin).length.sum() / 1000)
+    x0, y0, x1, y1 = g.bounds
+    feats, off = [], 0
+    while True:
+        q = dict(where='fcode=46006', geometry=f'{x0},{y0},{x1},{y1}', geometryType='esriGeometryEnvelope', inSR=4326,
+                 outSR=4326, spatialRel='esriSpatialRelIntersects', outFields='fcode', returnGeometry='true',
+                 resultOffset=off, resultRecordCount=1000, f='geojson')
+        req = urllib.request.Request(NHD_URL, data=urllib.parse.urlencode(q).encode(),
+                                     headers={'User-Agent': 'EnhancedTOPMODEL-add_sites'})
+        js = json.loads(urllib.request.urlopen(req, timeout=180).read().decode())
+        if 'error' in js:
+            raise RuntimeError(js['error'])
+        batch = js.get('features', [])
+        feats += batch
+        if len(batch) < 1000 and not js.get('exceededTransferLimit'):
+            break
+        off += len(batch)
+    proj = Transformer.from_crs(4326, 5070, always_xy=True).transform
+    gb = stransform(proj, g)
+    total = 0.0
+    for f in feats:
+        if f.get('geometry'):
+            total += stransform(proj, shape(f['geometry'])).intersection(gb).length
+    return total / 1000
 
 
 # ------------------------------------------------------------------ geometry helpers
@@ -342,7 +366,8 @@ HEIGHT = dict(water=0.1, developed=8, barren=0.1, forest=20, shrub=2, grass=0.5,
 
 
 def land_cover(nlcd):
-    cov = nlcd['cover']
+    known = [c for codes in LC_GROUPS.values() for c in codes]
+    cov = nlcd['cover'][np.isin(nlcd['cover'], known)]  # drop no-data / outside-basin codes
     n = max(len(cov), 1)
     fr = {g: float(np.isin(cov, codes).sum() / n) for g, codes in LC_GROUPS.items()}
     fr['evergreen'] = float(((cov == 42).sum() + 0.5 * (cov == 43).sum()) / n)
@@ -402,9 +427,13 @@ def build_site(meta, basin, dem, met, q_cfs, nlcd, nhd_km, us_proj, iters=1200, 
     Rs = met['srad'] * met['dayl'] / 1e6
     ea = met['vp'] / 1000
     Q = np.array([q_cfs.get(d, np.nan) for d in dates], float)
-    Q = np.where(Q >= 0, Q * 0.0283168 * 86400 / (area_km2 * 1e6) * 1000, np.nan)
+    Q = np.where(Q >= 0, Q * 86400 / (area_km2 * 1e6) * 1000, np.nan)  # pygeohydro NWIS returns m3/s
     log(f'    discharge: {np.isfinite(Q).sum()} of {N} days, mean {np.nanmean(Q[SPIN:]) * 365:.0f} mm/yr; '
         f'precip {P[SPIN:].mean() * 365:.0f} mm/yr ({met.get("source", "Daymet")})')
+    rr = np.nanmean(Q[SPIN:]) / P[SPIN:].mean()
+    if not 0.03 < rr < 1.3:
+        raise SystemExit(f"{meta['id']}: runoff ratio {rr:.3f} is implausible (Q {np.nanmean(Q[SPIN:]) * 365:.0f} mm/yr, "
+                         f"P {P[SPIN:].mean() * 365:.0f} mm/yr). Check the discharge units or the basin area.")
     pack = encode_pack(P, Tx, Tn, Rs, ea, Q)
 
     # decode exactly as the page does (rounded values) so the preset is fitted to what the page will run
