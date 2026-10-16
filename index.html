@@ -12,16 +12,19 @@
   --bg:#f2f5f4; --panel:#ffffff; --fg:#16201e; --muted:#5a6967; --line:#d6dedc; --soft:#e9eeed;
   --sim:#0b6fb3; --obs:#16201e; --pcp:#8db4cf; --et:#2a8a63; --warn:#b4600c; --bad:#b3261e; --good:#1f7a4d;
   --good-bg:#dcf1e6; --warn-bg:#fbe9d2; --bad-bg:#f8dcd9; --shade:rgba(22,32,30,.06);
+  --lai:#4f8a1c; --tx:#c2413a; --tn:#2f6fae; --rad:#b07800; --pet:#7353b0; --stor:#8a6a35; --net:#183a5c;
   --ui:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0e1514; --panel:#162120; --fg:#e3ebe9; --muted:#8fa19e; --line:#2a3836; --soft:#1e2c2a;
   --sim:#5db4f0; --obs:#e3ebe9; --pcp:#4a7391; --et:#52c79a; --warn:#e0a05a; --bad:#f0827a; --good:#6fd1a0;
-  --good-bg:#1b3a2d; --warn-bg:#3d2d16; --bad-bg:#40201d; --shade:rgba(255,255,255,.05); color-scheme:dark}}
+  --good-bg:#1b3a2d; --warn-bg:#3d2d16; --bad-bg:#40201d; --shade:rgba(255,255,255,.05);
+  --lai:#9fd162; --tx:#f08a7e; --tn:#7fb6ea; --rad:#e8b84a; --pet:#b39ae6; --stor:#c9a978; --net:#cfe3f5; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0e1514; --panel:#162120; --fg:#e3ebe9; --muted:#8fa19e; --line:#2a3836; --soft:#1e2c2a;
   --sim:#5db4f0; --obs:#e3ebe9; --pcp:#4a7391; --et:#52c79a; --warn:#e0a05a; --bad:#f0827a; --good:#6fd1a0;
-  --good-bg:#1b3a2d; --warn-bg:#3d2d16; --bad-bg:#40201d; --shade:rgba(255,255,255,.05); color-scheme:dark}
+  --good-bg:#1b3a2d; --warn-bg:#3d2d16; --bad-bg:#40201d; --shade:rgba(255,255,255,.05);
+  --lai:#9fd162; --tx:#f08a7e; --tn:#7fb6ea; --rad:#e8b84a; --pet:#b39ae6; --stor:#c9a978; --net:#cfe3f5; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--ui);font-size:14px;line-height:1.45;
   padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -112,6 +115,21 @@ details.about>summary{cursor:pointer;font-weight:600}
 details.about p,details.about li{max-width:90ch}
 details.about ul{padding-left:18px;margin:6px 0}
 a{color:var(--sim)}
+.chips{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0 10px}
+.chips .cg{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.chips .cg>span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+.chip{all:unset;cursor:pointer;font-size:12px;padding:2px 9px;border:1px solid var(--line);border-radius:12px;color:var(--muted)}
+.chip:hover{border-color:var(--muted)}
+.chip[aria-pressed="true"]{border-color:var(--sim);color:var(--fg);background:var(--soft);box-shadow:inset 0 0 0 1px var(--sim)}
+.chip:focus-visible{outline:2px solid var(--sim);outline-offset:2px}
+.strip{border-top:1px solid var(--line);padding-top:6px;margin-top:6px}
+.strip:first-child{border-top:0;margin-top:0;padding-top:0}
+.strip .sh{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.strip .sh b{font-size:12.5px;font-weight:600}
+.strip .sh b small{font-weight:400;color:var(--muted);margin-left:4px}
+.strip .sv{font:11.5px var(--mono);color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.strip .sv i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.mapopts{display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center}
 @media (max-width:1100px){#sites{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){.maps{grid-template-columns:minmax(0,1fr)}.layout{grid-template-columns:minmax(0,1fr)}.rail{position:static;max-height:none}.grid3{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:620px){#sites{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2{grid-template-columns:minmax(0,1fr)}h1{font-size:19px}}
@@ -154,7 +172,9 @@ a{color:var(--sim)}
       <div class="panel">
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
           <h2 style="margin:0">Location and topographic index</h2>
-          <label class="row hint" for="satToggle"><input type="checkbox" id="satToggle"> Show saturated area on <span class="mono" id="satDay">–</span></label>
+          <div class="mapopts hint"><label class="row" for="satToggle" style="gap:5px"><input type="checkbox" id="satToggle"> Show saturated area on <span class="mono" id="satDay">–</span></label>
+            <select id="satMode" aria-label="How saturated cells are placed"><option value="net" selected>Connected to the stream</option><option value="raw">Wettest cells, ranked by TI</option></select>
+            <label class="row" for="netToggle" style="gap:5px"><input type="checkbox" id="netToggle" checked> Drainage lines</label></div>
         </div>
         <div class="maps">
           <figure><svg id="usMap" role="group" aria-label="Locations of the six watersheds"></svg><figcaption class="hint">Click a dot to switch watershed.</figcaption></figure>
@@ -166,7 +186,7 @@ a{color:var(--sim)}
             </div>
             <div class="row hint" style="margin-top:6px"><button class="btn" id="followBtn" type="button">Follow hydrograph</button><span id="pinNote">Showing the hover day, or the peak flow day.</span></div></figure>
         </div>
-        <p class="note" style="margin-bottom:0">Wetter (higher index) cells saturate first. With the overlay on, the orange cells are the wettest cells, as many as the model's saturated fraction on the day shown (the model tracks area by index class, not by location). By default the day follows the hydrograph hover, or the largest simulated flow in the evaluation window. Click the hydrograph, drag the slider or press Play to pin a day and step through time. The map is the 30 m index averaged to 90–180 m cells, so its wet tail is smoother than the classes the model uses.</p>
+        <p class="note" style="margin-bottom:0">Wetter (higher index) cells saturate first. With the overlay on, the orange area holds as many cells as the model's saturated fraction on the day shown (the model tracks area by index class, not by location). <b>Connected to the stream</b> places them along drainage paths: cells still wet up in order of their index, but each cell is routed to the gauge along its wettest corridor through the index grid, and when a cell turns wet its path to the stream does too, so saturation shows as one network spreading up from the outlet instead of scattered wet pixels. <b>Wettest cells</b> shows the plain index ranking, which breaks up because averaging to coarse cells dilutes narrow valley bottoms. Drainage lines are traced the same way (the page has no DEM), so they follow the index valleys, not mapped streams. By default the day follows the hydrograph hover, or the largest simulated flow in the evaluation window. Click the hydrograph, drag the slider or press Play to pin a day and step through time. The map is the 30 m index averaged to 90–180 m cells, so its wet tail is smoother than the classes the model uses. Hover the map for a cell's index and upstream area.</p>
       </div>
 
       <div class="panel">
@@ -182,6 +202,21 @@ a{color:var(--sim)}
         <div class="hoverline" id="hover">Hover the plot for daily values.</div>
         <canvas class="chart" id="cHyd" style="height:340px" aria-label="Observed and simulated daily discharge with precipitation"></canvas>
         <div class="legend"><span><i style="background:var(--obs)"></i>Observed (USGS)</span><span><i style="background:var(--sim)"></i>Simulated</span><span><i class="b" style="background:var(--pcp)"></i>Precipitation (Daymet)</span><span>Shaded: 2009 spin-up</span></div>
+      </div>
+
+      <div class="panel" id="varPanel">
+        <div class="row" style="justify-content:space-between;margin-bottom:2px">
+          <h2 style="margin:0">Inputs and model variables</h2>
+          <div class="row">
+            <div class="seg" id="segVarMode" role="group" aria-label="View">
+              <button type="button" data-v="ts" aria-pressed="true">Time series</button><button type="button" data-v="cyc" aria-pressed="false">Mean annual cycle</button>
+            </div>
+            <button class="btn" id="btnCsv" type="button" title="Daily forcing, model fluxes and states for the current parameters">Download daily CSV</button>
+          </div>
+        </div>
+        <div class="chips" id="varChips" aria-label="Variables to plot"></div>
+        <div id="strips"></div>
+        <p class="note" id="varNote" style="margin-bottom:0"></p>
       </div>
 
       <div class="panel">
@@ -205,6 +240,8 @@ a{color:var(--sim)}
         <div class="scroll"><table id="wb"></table></div>
         <div style="margin-top:12px"><h2 style="margin-bottom:2px">Where simulated streamflow comes from (evaluation window)</h2>
           <div class="stack" id="comp"></div><div class="legend" id="compLeg"></div></div>
+        <div style="margin-top:12px"><h2 style="margin-bottom:2px">Where simulated evapotranspiration comes from (evaluation window)</h2>
+          <div class="stack" id="compEt"></div><div class="legend" id="compEtLeg"></div></div>
       </div>
 
       <div class="grid3">
@@ -217,11 +254,12 @@ a{color:var(--sim)}
         <details class="about">
           <summary>About the model, data and limits</summary>
           <p><b>Model.</b> Daily Enhanced TOPMODEL: Penman-Monteith PET with a seasonal LAI curve, canopy rain and snow interception, degree-day snowmelt, optional shallow stormflow zone, infiltration excess and impervious area. The formulation is a line-by-line port of <span class="mono">enhanced_topmodel_core()</span> from the R app, without the land-use-change scenario and channel routing. Water balance closes to about 1e-11 mm over five years at every site, with all options on or off. I could not run the R app here, so the port is checked by that closure and by reading it against the source, not by comparing outputs.</p>
+          <p><b>Inputs and outputs.</b> The inputs and model variables panel plots the Daymet forcing (precipitation, temperature, solar radiation, vapour pressure and VPD) next to the model's seasonal LAI, albedo, net radiation, PET and ET, ET and runoff components, snow and canopy storage, soil deficits, stormflow storage and saturated area, as daily series or as a mean annual cycle. Download daily CSV exports all of them for the current parameters.</p>
           <p><b>Data.</b> Forcing is Daymet v4 daily weather (Thornton et al., doi:10.3334/ORNLDAAC/2129), averaged over 16 pixels sampled inside each basin. Observed flow is USGS NWIS daily mean discharge converted to mm/d with the gauge drainage area. Basin outlines come from the USGS NLDI. The topographic index is computed from the 30 m USGS 3DEP DEM with priority-flood filling, MD-infinity flow routing and ln(a/tanβ), grouped into 40 classes. The R app uses 5 m by default, so classes here are smoother and the wet tail is probably under-resolved.</p>
           <ul>
             <li>Period is 2009–2013 on Daymet's 365-day calendar (Dec 31 dropped in 2012). Dates after Feb 2012 can be one day off the civil date. 2009 is spin-up and excluded from statistics by default.</li>
             <li>Basin-mean Daymet precipitation is biased in steep terrain, so some water-balance misfit (Big Sur, Sabino Creek) comes from the forcing and cannot be fixed with soil parameters.</li>
-            <li>No LAI or albedo time series: LAI follows the parameter curve. No channel routing: Qsim is the sum of runoff components on the same day.</li>
+            <li>No LAI or albedo time series: LAI follows the parameter curve (leaf-on and leaf-off LAI, leaf-out and leaf-fall dates, transition length), shown in the inputs and model variables panel. No channel routing: Qsim is the sum of runoff components on the same day.</li>
             <li>Preset parameters were fitted to all of 2010–2013 with a random search (11 parameters, objective = ½KGE + ½√NSE minus a bias penalty), so preset statistics are in-sample. A split-sample test (fit 2010–11, test 2012–13) is shown below the statistics table.</li>
             <li>Parameters are effective values for a lumped daily model and are not uniquely identifiable from one hydrograph.</li>
           </ul>
@@ -626,6 +664,7 @@ async function selectSite(id){
   const s=DATA.sites.find(x=>x.id===id);
   if(!s.F)await decode(s);
   if(!s.cells)s.cells=await inflate(s.map.q);
+  if(!s.net)buildNet(s);
   S.site=s;if(!S.params[id])S.params[id]=presetParams(s);
   document.querySelectorAll('.site').forEach(b=>b.setAttribute('aria-pressed',b.dataset.id===id));
   document.querySelectorAll('.loc').forEach(g=>g.setAttribute('aria-pressed',g.dataset.id===id));
@@ -684,6 +723,11 @@ function renderTables(){
   const tot=sumRange(o.Qtot,r[0],r[1])||1;let bar='',leg='';
   for(const [l,k,c] of comp){const f=sumRange(o[k],r[0],r[1])/tot;bar+=`<div style="width:${(100*f).toFixed(2)}%;background:${c}"></div>`;leg+=`<span><i class="b" style="background:${c}"></i>${l} ${(100*f).toFixed(f<0.01&&f>0?1:0)}%</span>`;}
   $('comp').innerHTML=bar;$('compLeg').innerHTML=leg;
+  const ce=[['Root zone (transpiration and soil)','Ea','var(--et)'],['Interception','Ei','var(--lai)'],['Canopy snow sublimation','Es','var(--tn)'],['Impervious','Eimp','var(--bad)']];
+  const te=sumRange(o.ET,r[0],r[1])||1;bar='';leg='';
+  for(const [l,k,c] of ce){const f=sumRange(o[k],r[0],r[1])/te;if(f<=0&&k!=='Ea')continue;bar+=`<div style="width:${(100*f).toFixed(2)}%;background:${c}"></div>`;leg+=`<span><i class="b" style="background:${c}"></i>${l} ${(100*f).toFixed(f<0.01&&f>0?1:0)}%</span>`;}
+  const ny=(r[1]-r[0])/365;leg+=`<span>ET ${Math.round(te/ny)} mm/yr of PET ${Math.round(sumRange(o.PET,r[0],r[1])/ny)} mm/yr</span>`;
+  $('compEt').innerHTML=bar;$('compEtLeg').innerHTML=leg;
 }
 
 /* ---------- charts ---------- */
@@ -782,7 +826,7 @@ function drawTI(){
 function draw(){
   if(!S.site||!S.out)return;
   drawHyd();drawMonthly();drawFdc();drawMap();
-  drawState('cSwe',S.out.SWE,1,'sim');drawState('cSat',S.out.satFrac,100,'et');drawTI();
+  drawState('cSwe',S.out.SWE,1,'sim');drawState('cSat',S.out.satFrac,100,'et');drawTI();drawStrips();
 }
 
 /* ---------- maps ---------- */
@@ -805,7 +849,7 @@ function satDay(){return S.mapDay>=0?S.mapDay:(S.hoverIdx>=0?S.hoverIdx:peakDay(
 function setMapDay(d){S.mapDay=Math.max(0,Math.min(N-1,Math.round(d)));$('daySlider').value=S.mapDay;$('satToggle').checked=true;$('pinNote').textContent='Pinned to '+dateOf(S.mapDay)+'.';}
 let lastT=0,acc=0;
 function tick(t){if(!S.playing)return;const dt=Math.min((t-lastT)/1000,0.25);lastT=t;acc+=dt*(+$('speedSel').value);const st=Math.floor(acc);
-  if(st>0){acc-=st;let d=S.mapDay+st;if(d>=N)d=0;setMapDay(d);drawMap();drawHyd();}requestAnimationFrame(tick);}
+  if(st>0){acc-=st;let d=S.mapDay+st;if(d>=N)d=0;setMapDay(d);drawMap();drawHyd();drawStrips();}requestAnimationFrame(tick);}
 function stopPlay(){S.playing=false;$('playBtn').textContent='Play';$('playBtn').setAttribute('aria-pressed','false');}
 function togglePlay(){
   if(S.playing){stopPlay();return;}
@@ -813,8 +857,8 @@ function togglePlay(){
   S.playing=true;$('playBtn').textContent='Pause';$('playBtn').setAttribute('aria-pressed','true');lastT=performance.now();acc=0;requestAnimationFrame(tick);
 }
 $('playBtn').addEventListener('click',togglePlay);
-$('daySlider').addEventListener('input',e=>{setMapDay(+e.target.value);drawMap();drawHyd();});
-$('followBtn').addEventListener('click',()=>{stopPlay();S.mapDay=-1;$('pinNote').textContent='Showing the hover day, or the peak flow day.';drawMap();drawHyd();});
+$('daySlider').addEventListener('input',e=>{setMapDay(+e.target.value);drawMap();drawHyd();drawStrips();});
+$('followBtn').addEventListener('click',()=>{stopPlay();S.mapDay=-1;$('pinNote').textContent='Showing the hover day, or the peak flow day.';drawMap();drawHyd();drawStrips();});
 let mapGeom=null;
 function drawMap(){
   const s=S.site;if(!s||!s.cells||!S.out)return;
@@ -823,16 +867,26 @@ function drawMap(){
   const mh=Math.min(Math.max(Math.round((W-2*pad)*m.h/m.w),110),440);cv.style.height=(mh+2*pad+legendH)+'px';
   const{c,w,h}=setup(cv);
   const sc=Math.min((w-2*pad)/m.w,(h-legendH-2*pad)/m.h),ox=(w-m.w*sc)/2,oy=pad+((h-legendH-2*pad)-m.h*sc)/2;
-  let satLevel=null,d=satDay();
-  if(sat){const cnt=new Float64Array(31);let tot=0;for(let i=0;i<m.w*m.h;i++){const v=s.cells[i];if(v<=30){cnt[v]++;tot++;}}
+  let satLevel=null,d=satDay();const net=s.net,conn=sat&&net&&$('satMode').value==='net';let nSat=0;
+  if(conn)nSat=Math.round(S.out.satFrac[d]*net.no);
+  else if(sat){const cnt=new Float64Array(31);let tot=0;for(let i=0;i<m.w*m.h;i++){const v=s.cells[i];if(v<=30){cnt[v]++;tot++;}}
     const target=S.out.satFrac[d]*tot;let cum=0,L=31;
     for(let v=30;v>=0;v--){if(cum>=target)break;const nx=cum+cnt[v];if(Math.abs(nx-target)<=Math.abs(cum-target)){cum=nx;L=v;}else break;}
     satLevel=L;}
   $('satDay').textContent=sat?`${dateOf(d)} (${(S.out.satFrac[d]*100).toFixed(1)}% saturated)`:dateOf(d);
   const off=document.createElement('canvas');off.width=m.w;off.height=m.h;const ic=off.getContext('2d'),img=ic.createImageData(m.w,m.h);
-  for(let i=0;i<m.w*m.h;i++){const v=s.cells[i];if(v>30)continue;const ti=cellTI(v);const rgb=(satLevel!==null&&v>=satLevel)?SATRGB:rampColor((ti-TI_LO)/(TI_HI-TI_LO));
+  for(let i=0;i<m.w*m.h;i++){const v=s.cells[i];if(v>30)continue;const ti=cellTI(v);const isSat=conn?net.rank[i]<nSat:(satLevel!==null&&v>=satLevel);const rgb=isSat?SATRGB:rampColor((ti-TI_LO)/(TI_HI-TI_LO));
     img.data[4*i]=rgb[0];img.data[4*i+1]=rgb[1];img.data[4*i+2]=rgb[2];img.data[4*i+3]=255;}
   ic.putImageData(img,0,0);c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';c.drawImage(off,ox,oy,m.w*sc,m.h*sc);
+  // drainage lines and connected saturated channels (cell centre to downstream cell centre)
+  if(net){const W=m.w,cx=i=>ox+((i%W)+.5)*sc,cy=i=>oy+(((i/W)|0)+.5)*sc;c.lineCap='round';
+    if($('netToggle').checked){c.strokeStyle=col('net');c.globalAlpha=.55;
+      for(let i=0;i<net.down.length;i++){const a=net.acc[i];if(a<net.thr||net.down[i]<0)continue;const j=net.down[i];
+        c.lineWidth=Math.min(Math.max(0.7,sc*0.22)*(1+0.8*Math.log10(a/net.thr)),Math.max(sc*0.9,1.5),4);c.beginPath();c.moveTo(cx(i),cy(i));c.lineTo(cx(j),cy(j));c.stroke();}
+      c.globalAlpha=1;}
+    if(conn&&nSat>0){c.strokeStyle=`rgb(${SATRGB})`;c.lineWidth=Math.max(sc*0.85,1.6);
+      for(let i=0;i<net.down.length;i++){const j=net.down[i];if(j<0||net.rank[i]<0||net.rank[i]>=nSat||net.acc[i]<2)continue;c.beginPath();c.moveTo(cx(i),cy(i));c.lineTo(cx(j),cy(j));c.stroke();}}
+    c.lineCap='butt';}
   // outline
   c.strokeStyle=col('fg');c.lineWidth=1.2;c.lineJoin='round';
   for(const ring of m.outline){c.beginPath();ring.forEach((p,i)=>i?c.lineTo(ox+p[0]*sc,oy+p[1]*sc):c.moveTo(ox+p[0]*sc,oy+p[1]*sc));c.closePath();c.stroke();}
@@ -850,7 +904,10 @@ function drawMap(){
   c.fillStyle=col('muted');c.font='11px '+getComputedStyle(document.body).getPropertyValue('--mono');c.textBaseline='top';
   c.textAlign='left';c.fillText('Topographic index ln(a/tanβ)',pad,ly-2);
   c.textAlign='left';c.fillText(String(TI_LO),pad,ly+25);c.textAlign='right';c.fillText('≥'+TI_HI,pad+bw,ly+25);
-  if(sat){c.fillStyle=`rgb(${SATRGB})`;c.fillRect(pad+bw+16,ly+12,10,10);c.fillStyle=col('muted');c.textAlign='left';c.fillText('saturated',pad+bw+30,ly+11);}
+  let lx2=pad+bw+16;
+  if(sat){c.fillStyle=`rgb(${SATRGB})`;c.fillRect(lx2,ly+12,10,10);c.fillStyle=col('muted');c.textAlign='left';c.fillText('saturated',lx2+14,ly+11);}
+  if(net&&$('netToggle').checked){const dx=pad+bw+16,dy=sat?ly+26:ly+12;c.strokeStyle=col('net');c.globalAlpha=.55;c.lineWidth=2;c.beginPath();c.moveTo(dx,dy+5);c.lineTo(dx+10,dy+5);c.stroke();c.globalAlpha=1;
+    c.fillStyle=col('muted');c.textAlign='left';c.fillText('drainage lines',dx+14,dy-1);}
   // scale bar
   let km=0.5;for(const k of[0.5,1,2,5,10,20]){if(k*1000/m.cellM*sc<=w*0.26)km=k;}
   const sp=km*1000/m.cellM*sc;c.strokeStyle=col('fg');c.fillStyle=col('fg');c.lineWidth=2;c.beginPath();c.moveTo(w-pad-sp,ly+18);c.lineTo(w-pad,ly+18);c.moveTo(w-pad-sp,ly+14);c.lineTo(w-pad-sp,ly+22);c.moveTo(w-pad,ly+14);c.lineTo(w-pad,ly+22);c.stroke();
@@ -863,25 +920,30 @@ function mapHover(e){
   if(gx<0||gy<0||gx>=m.w||gy>=m.h){return;}
   const v=s.cells[gy*m.w+gx];if(v>30){$('mapHover').textContent='Outside the watershed.';return;}
   const ti=cellTI(v),tot=s.frac.reduce((a,b)=>a+b,0);let below=0;s.val.forEach((x,i)=>{if(x<ti)below+=s.frac[i];});
-  $('mapHover').textContent=`TI ${ti.toFixed(1)} · wetter than ${(100*below/tot).toFixed(0)}% of the basin (cell ≈ ${m.cellM} m)`;
+  const up=s.net?s.net.acc[gy*m.w+gx]*m.cellM*m.cellM/1e6:NaN;
+  $('mapHover').textContent=`TI ${ti.toFixed(1)} · wetter than ${(100*below/tot).toFixed(0)}% of the basin · drains ${up<1?up.toFixed(2):up.toFixed(1)} km² (cell ≈ ${m.cellM} m)`;
 }
 $('cMap').addEventListener('pointermove',mapHover);$('cMap').addEventListener('pointerdown',mapHover);
-$('satToggle').addEventListener('change',()=>drawMap());
+$('satToggle').addEventListener('change',()=>drawMap());$('satMode').addEventListener('change',()=>{$('satToggle').checked=true;drawMap();});$('netToggle').addEventListener('change',()=>drawMap());
 let mapPend=false;function schedMap(){if(mapPend)return;mapPend=true;requestAnimationFrame(()=>{mapPend=false;drawMap();});}
 
 /* ---------- hover ---------- */
+function setHover(i){
+  S.hoverIdx=i;const s=S.site,o=S.out;
+  $('hover').textContent=`${dateOf(i)}  P ${fmt(s.F.P[i],1)}  Tmean ${fmt((s.F.Tmax[i]+s.F.Tmin[i])/2,1)}°C  LAI ${fmt(o.LAI[i],2)}  PET ${fmt(o.PET[i],2)}  ET ${fmt(o.ET[i],2)}  SWE ${fmt(o.SWE[i],0)} mm  Sat ${fmt(100*o.satFrac[i],1)}%  Q obs ${fmt(s.Q[i],2)}  Q sim ${fmt(o.Qsim[i],2)} mm/d`;
+  drawHyd();drawStrips();if($('satToggle').checked)schedMap();
+}
+function clearHover(){S.hoverIdx=-1;$('hover').textContent='Hover the plot for daily values.';if(S.site&&S.out){drawHyd();drawStrips();if($('satToggle').checked)schedMap();}}
 function hoverAt(e){
   if(!hydGeom)return;const r=$('cHyd').getBoundingClientRect(),x=e.clientX-r.left;
   const i=Math.round(hydGeom.x0+(x-hydGeom.L)/hydGeom.pw*(hydGeom.x1-hydGeom.x0));
   if(i<hydGeom.x0||i>=hydGeom.x1){return;}
-  S.hoverIdx=i;const s=S.site,o=S.out;
   if(e.type==='pointerdown'){setMapDay(i);}
-  $('hover').textContent=`${dateOf(i)}  P ${fmt(s.F.P[i],1)}  Tmean ${fmt((s.F.Tmax[i]+s.F.Tmin[i])/2,1)}°C  SWE ${fmt(o.SWE[i],0)} mm  Q obs ${fmt(s.Q[i],2)}  Q sim ${fmt(o.Qsim[i],2)} mm/d`;
-  drawHyd();if($('satToggle').checked)schedMap();
+  setHover(i);
 }
 $('cHyd').addEventListener('pointermove',hoverAt);
 $('cHyd').addEventListener('pointerdown',hoverAt);
-$('cHyd').addEventListener('pointerleave',()=>{S.hoverIdx=-1;$('hover').textContent='Hover the plot for daily values.';if(S.site){drawHyd();if($('satToggle').checked)schedMap();}});
+$('cHyd').addEventListener('pointerleave',clearHover);
 
 /* ---------- auto-calibrate (DDS) ---------- */
 function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
@@ -916,10 +978,10 @@ function buildControls(){
   const seg=$('segRange');
   [['all','All'],['2009','2009'],['2010','2010'],['2011','2011'],['2012','2012'],['2013','2013']].forEach(([v,l])=>{
     const b=document.createElement('button');b.type='button';b.dataset.v=v;b.textContent=l;b.setAttribute('aria-pressed',v==='all');
-    b.addEventListener('click',()=>{S.range=v;seg.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawHyd();});seg.append(b);});
+    b.addEventListener('click',()=>{S.range=v;seg.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawHyd();drawStrips();});seg.append(b);});
   $('segScale').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{S.scale=b.dataset.v;$('segScale').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawHyd();}));
   const sel=$('evalSel');[['all','2010–2013 (after spin-up)'],['2010','2010'],['2011','2011'],['2012','2012'],['2013','2013'],['2009','2009 (spin-up)']].forEach(([v,l])=>{const o=document.createElement('option');o.value=v;o.textContent=l;sel.append(o);});
-  sel.addEventListener('change',()=>{S.evalSel=sel.value;renderMetrics();renderTables();drawMonthly();drawFdc();});
+  sel.addEventListener('change',()=>{S.evalSel=sel.value;renderMetrics();renderTables();drawMonthly();drawFdc();drawStrips();});
   $('btnCal').addEventListener('click',()=>{S.params[S.site.id]=presetParams(S.site);syncUI();update();$('autoMsg').textContent='';});
   $('btnDef').addEventListener('click',()=>{S.params[S.site.id]=DEFAULTS();syncUI();update();$('autoMsg').textContent='';});
   $('btnAuto').addEventListener('click',autoCalibrate);
@@ -928,10 +990,179 @@ function buildControls(){
   new ResizeObserver(()=>{if(S.out)draw();}).observe(document.querySelector('.main'));
 }
 
+/* ---------- inputs and model variables ---------- */
+const VG=['Forcing','Vegetation and energy','Water fluxes','Storages'];
+function vpdOf(F){if(F.vpd)return F.vpd;const e=T=>0.6108*Math.exp(17.27*T/(T+237.3)),a=new Float64Array(N);
+  for(let i=0;i<N;i++)a[i]=Math.max((e(F.Tmax[i])+e(F.Tmin[i]))/2-F.ea[i],0);return F.vpd=a;}
+const VARS=[
+ {k:'precip',g:0,t:'Precipitation',u:'mm/d',flux:1,s:[{n:'P',c:'pcp',f:F=>F.P,bar:1}]},
+ {k:'temp',g:0,t:'Air temperature',u:'°C',s:[{n:'Tmax',c:'tx',f:F=>F.Tmax},{n:'Tmin',c:'tn',f:F=>F.Tmin}],ref:p=>({v:p.Tsnow,l:'rain/snow '+p.Tsnow+'°C'})},
+ {k:'rad',g:0,t:'Radiation',u:'MJ/m²/d',s:[{n:'Solar Rs',c:'rad',f:F=>F.Rs},{n:'Net Rn (model)',c:'pet',f:(F,o)=>o.Rn}]},
+ {k:'hum',g:0,t:'Humidity',u:'kPa',s:[{n:'Vapour pressure',c:'tn',f:F=>F.ea},{n:'VPD',c:'tx',f:F=>vpdOf(F)}]},
+ {k:'lai',g:1,raw:1,t:'Leaf area index',u:'m²/m²',s:[{n:'LAI',c:'lai',f:(F,o)=>o.LAI,area:1}]},
+ {k:'alb',g:1,t:'Albedo and snow cover',u:'fraction',s:[{n:'Albedo',c:'rad',f:(F,o)=>o.albedo},{n:'Snow-covered',c:'sim',f:(F,o)=>o.snowCover,area:1}]},
+ {k:'pet',g:1,t:'Potential and actual ET',u:'mm/d',flux:1,s:[{n:'PET',c:'pet',f:(F,o)=>o.PET},{n:'ET',c:'et',f:(F,o)=>o.ET}]},
+ {k:'etp',g:2,t:'ET components',u:'mm/d',flux:1,stack:1,s:[{n:'Root zone',c:'et',f:(F,o)=>o.Ea},{n:'Interception',c:'lai',f:(F,o)=>o.Ei},{n:'Canopy snow',c:'tn',f:(F,o)=>o.Es},{n:'Impervious',c:'bad',f:(F,o)=>o.Eimp}]},
+ {k:'snowp',g:2,t:'Rain, snowfall and melt',u:'mm/d',flux:1,s:[{n:'Rain',c:'pcp',f:(F,o)=>o.rain},{n:'Snowfall',c:'tn',f:(F,o)=>o.snow},{n:'Melt',c:'warn',f:(F,o)=>o.melt}]},
+ {k:'qp',g:2,t:'Runoff components',u:'mm/d',flux:1,stack:1,s:[{n:'Baseflow',c:'sim',f:(F,o)=>o.Qb},{n:'Saturation excess',c:'et',f:(F,o)=>o.Qof},{n:'Stormflow',c:'pcp',f:(F,o)=>o.Qssf},{n:'Infiltration excess',c:'warn',f:(F,o)=>o.Qie},{n:'Impervious',c:'bad',f:(F,o)=>o.Qimp}]},
+ {k:'rech',g:2,t:'Drainage and recharge',u:'mm/d',flux:1,s:[{n:'Unsaturated drainage',c:'stor',f:(F,o)=>o.Quz},{n:'Stormflow-zone leakage',c:'tn',f:(F,o)=>o.qv}]},
+ {k:'swe',g:3,t:'Snowpack and canopy water',u:'mm',s:[{n:'SWE',c:'sim',f:(F,o)=>o.SWE,area:1},{n:'Canopy snow',c:'tn',f:(F,o)=>o.Csnow},{n:'Canopy rain',c:'lai',f:(F,o)=>o.Ccan}]},
+ {k:'def',g:3,t:'Soil water deficits',u:'mm',s:[{n:'Mean deficit S̄',c:'stor',f:(F,o)=>o.Sbar},{n:'Root-zone deficit',c:'warn',f:(F,o)=>o.SRZ},{n:'Unsaturated storage',c:'sim',f:(F,o)=>o.SUZ}]},
+ {k:'wssf',g:3,t:'Stormflow-zone storage',u:'mm',s:[{n:'W',c:'pcp',f:(F,o)=>o.Wssf,area:1}]},
+ {k:'sat',g:3,t:'Saturated area',u:'% of basin',s:[{n:'Total',c:'et',f:(F,o)=>o.satFrac,sc:100,area:1},{n:'From stormflow zone',c:'pcp',f:(F,o)=>o.satFracSSF,sc:100}]},
+ {k:'stor',g:3,t:'Total water storage',u:'mm, relative',s:[{n:'Storage',c:'stor',f:(F,o)=>o.storage}]},
+];
+const VM=Object.fromEntries(VARS.map(v=>[v.k,v]));
+S.vars=['lai','pet','temp','qp'];S.varMode='ts';S.cycHover=-1;
+try{const v=JSON.parse(localStorage.getItem('tm_vars')||'null');if(Array.isArray(v))S.vars=v.filter(k=>VM[k]);}catch(e){}
+const strips={};
+
+function buildVarUI(){
+  const root=$('varChips');root.innerHTML='';
+  VG.forEach((g,gi)=>{const box=document.createElement('div');box.className='cg';box.innerHTML=`<span>${g}</span>`;
+    for(const v of VARS.filter(x=>x.g===gi)){const b=document.createElement('button');b.type='button';b.className='chip';b.textContent=v.t;b.dataset.k=v.k;
+      b.setAttribute('aria-pressed',S.vars.includes(v.k));
+      b.addEventListener('click',()=>{const on=S.vars.includes(v.k);S.vars=on?S.vars.filter(k=>k!==v.k):VARS.map(x=>x.k).filter(k=>k===v.k||S.vars.includes(k));
+        b.setAttribute('aria-pressed',!on);try{localStorage.setItem('tm_vars',JSON.stringify(S.vars));}catch(e){}buildStrips();drawStrips();});
+      box.append(b);}
+    root.append(box);});
+  $('segVarMode').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{S.varMode=b.dataset.v;S.cycHover=-1;
+    $('segVarMode').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawStrips();}));
+  $('btnCsv').addEventListener('click',downloadCsv);
+  buildStrips();
+}
+function buildStrips(){
+  const root=$('strips');root.innerHTML='';for(const k in strips)delete strips[k];
+  if(!S.vars.length){root.innerHTML='<p class="hint">Pick one or more variables above.</p>';return;}
+  for(const k of S.vars){const v=VM[k],d=document.createElement('div');d.className='strip';
+    d.innerHTML=`<div class="sh"><b>${v.t}<small>${v.u}</small></b><span class="sv"></span></div><canvas class="chart" style="height:${v.stack?130:112}px" aria-label="${v.t}"></canvas>`;
+    root.append(d);const cv=d.querySelector('canvas');strips[k]={cv,sv:d.querySelector('.sv'),geom:null};
+    cv.addEventListener('pointermove',e=>stripHover(k,e));cv.addEventListener('pointerdown',e=>stripHover(k,e));
+    cv.addEventListener('pointerleave',()=>{if(S.varMode==='cyc'){S.cycHover=-1;drawStrips();}else clearHover();});}
+}
+function seriesData(v){const F=S.site.F,o=S.out;return v.s.map(sr=>{let a=sr.f(F,o);if(sr.sc)a=Float64Array.from(a,x=>x*sr.sc);return a;});}
+function cycleOf(a,smooth){
+  const r=evalRange(),ny=Math.max(1,Math.round((r[1]-r[0])/365)),yrs=[];
+  for(let y=0;y<ny;y++){let z=Float64Array.from({length:365},(_,d)=>a[r[0]+y*365+d]);
+    if(smooth>1){const h=smooth>>1,zz=new Float64Array(365);for(let d=0;d<365;d++){let s=0;for(let j=-h;j<=h;j++)s+=z[(d+j+365)%365];zz[d]=s/(2*h+1);}z=zz;}
+    yrs.push(z);}
+  const m=new Float64Array(365),lo=new Float64Array(365).fill(Infinity),hi=new Float64Array(365).fill(-Infinity);
+  for(const z of yrs)for(let d=0;d<365;d++){m[d]+=z[d]/ny;lo[d]=Math.min(lo[d],z[d]);hi[d]=Math.max(hi[d],z[d]);}
+  return{m,lo,hi,ny};
+}
+const MD=d=>{let m=0;while(m<11&&d>=CUM[m+1])m++;return MN[m]+' '+(d-CUM[m]+1);};
+function drawStrip(k){
+  const v=VM[k],st=strips[k];if(!st)return;const cyc=S.varMode==='cyc';
+  const col=css(),{c,w,h}=setup(st.cv),L=44,R=8,T=6,B=18,pw=w-L-R,yT=T,yB=h-B;
+  let raw=seriesData(v),x0,x1,ys,band=null;
+  if(cyc){const cs=raw.map(a=>cycleOf(a,v.raw?1:7));ys=cs.map(z=>z.m);if(v.s.length===1&&cs[0].ny>1)band=cs[0];x0=0;x1=365;}
+  else{[x0,x1]=rangeBounds();ys=raw;}
+  // stacked cumulative
+  let draws=ys;if(v.stack){draws=[];let acc=new Float64Array(ys[0].length);for(const a of ys){acc=Float64Array.from(acc,(x,i)=>x+(Number.isFinite(a[i])?a[i]:0));draws.push(acc);}}
+  let mx=-Infinity,mn=Infinity;
+  for(const a of (band?[band.lo,band.hi]:[]).concat(draws))for(let i=x0;i<x1;i++){const y=a[i];if(Number.isFinite(y)){if(y>mx)mx=y;if(y<mn)mn=y;}}
+  const ref=v.ref?v.ref(S.params[S.site.id]):null;if(ref){mx=Math.max(mx,ref.v);mn=Math.min(mn,ref.v);}
+  if(!Number.isFinite(mx)){mx=1;mn=0;}
+  if(mn>0||v.flux||v.stack||v.s.some(s=>s.area))mn=Math.min(mn,0);
+  if(mx-mn<1e-9)mx=mn+1;const pad=(mx-mn)*0.06;let top=mx+pad,bot=mn<0?mn-pad:mn;
+  const Y=q=>yB-(q-bot)/(top-bot)*(yB-yT),X=i=>L+(i-x0)/(x1-x0)*pw;
+  c.strokeStyle=col('line');c.fillStyle=col('muted');c.lineWidth=1;c.textBaseline='middle';c.textAlign='right';
+  for(const t of ticks(bot,top,3)){const y=Math.round(Y(t))+.5;c.beginPath();c.moveTo(L,y);c.lineTo(w-R,y);c.stroke();c.fillText(fnum(t),L-5,y);}
+  if(bot<0&&top>0){c.strokeStyle=col('muted');c.globalAlpha=.5;const y=Math.round(Y(0))+.5;c.beginPath();c.moveTo(L,y);c.lineTo(w-R,y);c.stroke();c.globalAlpha=1;}
+  // x axis
+  c.fillStyle=col('muted');c.textAlign='center';c.textBaseline='top';c.strokeStyle=col('line');
+  if(cyc){for(let m=0;m<12;m++){const x=X(CUM[m]);c.beginPath();c.moveTo(x+.5,yB);c.lineTo(x+.5,yB+3);c.stroke();c.fillText(MN[m][0],(X(CUM[m])+X(CUM[m+1]))/2,yB+3);}}
+  else if(x1-x0<=400){for(let i=Math.ceil(x0);i<x1;i++){const d=i%365;if(CUM.includes(d)&&d<365){const x=X(i);c.fillText(MN[monthOf(i)],Math.min(Math.max(x+8,L+10),w-R-10),yB+3);c.beginPath();c.moveTo(x+.5,yB);c.lineTo(x+.5,yB+3);c.stroke();}}}
+  else{if(x0<SPIN){c.fillStyle=col('shade');c.fillRect(L,T,X(Math.min(SPIN,x1))-L,yB-T);c.fillStyle=col('muted');}
+    for(let y=0;y<5;y++){const i=y*365;if(i>=x0&&i<x1){const x=X(i);c.beginPath();c.moveTo(x+.5,yT);c.lineTo(x+.5,yB+3);c.stroke();c.fillText(2009+y,Math.min(x+16,w-R-14),yB+3);}}}
+  c.save();c.beginPath();c.rect(L,T,pw,yB-T);c.clip();
+  if(band){c.fillStyle=col(v.s[0].c);c.globalAlpha=.14;c.beginPath();for(let i=0;i<365;i++)c.lineTo(X(i),Y(band.hi[i]));for(let i=364;i>=0;i--)c.lineTo(X(i),Y(band.lo[i]));c.closePath();c.fill();c.globalAlpha=1;}
+  if(ref){c.strokeStyle=col('muted');c.setLineDash([2,3]);const y=Math.round(Y(ref.v))+.5;c.beginPath();c.moveTo(L,y);c.lineTo(w-R,y);c.stroke();c.setLineDash([]);
+    c.fillStyle=col('muted');c.textAlign='right';c.textBaseline='bottom';c.lineWidth=3;c.strokeStyle=col('panel');c.strokeText(ref.l,w-R-4,y-2);c.fillText(ref.l,w-R-4,y-2);}
+  const area=(a,base,cn,al)=>{c.fillStyle=col(cn);c.globalAlpha=al;c.beginPath();let first=true;
+    for(let i=x0;i<x1;i++){const y=Number.isFinite(a[i])?a[i]:0;first?(c.moveTo(X(i),Y(y)),first=false):c.lineTo(X(i),Y(y));}
+    for(let i=x1-1;i>=x0;i--)c.lineTo(X(i),Y(base?base[i]:0));c.closePath();c.fill();c.globalAlpha=1;};
+  const line=(a,cn,lw,dash)=>{c.strokeStyle=col(cn);c.lineWidth=lw;c.setLineDash(dash||[]);c.lineJoin='round';c.beginPath();let pen=false;
+    for(let i=x0;i<x1;i++){const y=a[i];if(!Number.isFinite(y)){pen=false;continue;}pen?c.lineTo(X(i),Y(y)):(c.moveTo(X(i),Y(y)),pen=true);}c.stroke();c.setLineDash([]);};
+  draws.forEach((a,j)=>{const sr=v.s[j];
+    if(v.stack){area(a,j?draws[j-1]:null,sr.c,.75);}
+    else if(sr.bar&&!cyc){c.fillStyle=col(sr.c);const bw=Math.max(1,pw/(x1-x0));for(let i=x0;i<x1;i++){const q=a[i];if(q>0)c.fillRect(X(i),Y(q),bw,Y(0)-Y(q));}}
+    else{if(sr.area||sr.bar)area(a,null,sr.c,.22);line(a,sr.c,1.4,sr.dash);}});
+  c.restore();
+  const hv=cyc?S.cycHover:(S.mapDay>=0?S.mapDay:S.hoverIdx);
+  if(hv>=x0&&hv<x1){c.strokeStyle=col('muted');c.lineWidth=1;const x=Math.round(X(hv))+.5;c.beginPath();c.moveTo(x,T);c.lineTo(x,yB);c.stroke();}
+  st.geom={L,pw,x0,x1};
+  // readout
+  const sw=sr=>`<i style="background:var(--${sr.c})"></i>`;
+  let txt;
+  if(hv>=x0&&hv<x1){txt=(cyc?MD(hv):dateOf(hv))+' · '+v.s.map((sr,j)=>`${sw(sr)}${sr.n} ${fmt(ys[j][hv],digits(ys[j][hv]))}`).join(' · ');}
+  else{const means=ys.map(a=>{let s=0,n=0;for(let i=x0;i<x1;i++)if(Number.isFinite(a[i])){s+=a[i];n++;}return n?s/n:NaN;});
+    txt=(cyc?'mean of daily cycle':'period mean')+' · '+v.s.map((sr,j)=>`${sw(sr)}${sr.n} ${fmt(means[j],digits(means[j]))}${v.flux?` <span title="annual total">(${Math.round(means[j]*365)} mm/yr)</span>`:''}`).join(' · ');}
+  st.sv.innerHTML=txt;
+}
+const digits=x=>!Number.isFinite(x)?1:Math.abs(x)>=100?0:Math.abs(x)>=10?1:2;
+function drawStrips(){
+  if(!S.site||!S.out)return;for(const k of S.vars)drawStrip(k);
+  const r=evalRange(),ny=(r[1]-r[0])/365;
+  $('varNote').textContent=S.varMode==='cyc'
+    ?`Day-of-year means over the evaluation window (${ny>1?ny+' years':'one year'}${ny>1?'; shaded band = range across years on single-variable strips':''}). Curves other than LAI are smoothed with a 7-day running mean. Change the window under Fit statistics.`
+    :'Same period as the discharge plot. Hover a strip to read daily values and move the hydrograph and map day; values beside each title are period means (and annual totals for fluxes) when nothing is hovered. Stacked strips add up to the total.';
+}
+function stripHover(k,e){
+  const g=strips[k]&&strips[k].geom;if(!g)return;const r=strips[k].cv.getBoundingClientRect();
+  const i=Math.round(g.x0+(e.clientX-r.left-g.L)/g.pw*(g.x1-g.x0));if(i<g.x0||i>=g.x1)return;
+  if(S.varMode==='cyc'){S.cycHover=i;drawStrips();return;}
+  if(e.type==='pointerdown')setMapDay(i);
+  setHover(i);
+}
+function downloadCsv(){
+  const F=S.site.F,o=S.out,Q=S.site.Q,vp=vpdOf(F);
+  const cols=[['date',i=>dateOf(i)],['P_mm',i=>F.P[i]],['Tmax_C',i=>F.Tmax[i]],['Tmin_C',i=>F.Tmin[i]],['Rs_MJm2d',i=>F.Rs[i]],['ea_kPa',i=>F.ea[i]],['VPD_kPa',i=>vp[i]],
+    ['LAI',i=>o.LAI[i]],['albedo',i=>o.albedo[i]],['snowCover',i=>o.snowCover[i]],['Rn_MJm2d',i=>o.Rn[i]],['PET_mm',i=>o.PET[i]],['Ewet_mm',i=>o.Ewet[i]],
+    ['rain_mm',i=>o.rain[i]],['snow_mm',i=>o.snow[i]],['melt_mm',i=>o.melt[i]],['SWE_mm',i=>o.SWE[i]],['Csnow_mm',i=>o.Csnow[i]],['Ccan_mm',i=>o.Ccan[i]],
+    ['Ei_mm',i=>o.Ei[i]],['Ea_mm',i=>o.Ea[i]],['Es_mm',i=>o.Es[i]],['Eimp_mm',i=>o.Eimp[i]],['ET_mm',i=>o.ET[i]],
+    ['Qb_mm',i=>o.Qb[i]],['Qof_mm',i=>o.Qof[i]],['Qssf_mm',i=>o.Qssf[i]],['Qie_mm',i=>o.Qie[i]],['Qimp_mm',i=>o.Qimp[i]],['Qsim_mm',i=>o.Qsim[i]],['Qobs_mm',i=>Q[i]],
+    ['Quz_mm',i=>o.Quz[i]],['qv_mm',i=>o.qv[i]],['Sbar_mm',i=>o.Sbar[i]],['SRZ_mm',i=>o.SRZ[i]],['SUZ_mm',i=>o.SUZ[i]],['Wssf_mm',i=>o.Wssf[i]],
+    ['satFrac',i=>o.satFrac[i]],['satFracSSF',i=>o.satFracSSF[i]],['storage_mm',i=>o.storage[i]]];
+  const f=x=>typeof x==='string'?x:Number.isFinite(x)?(+x.toPrecision(6)).toString():'';
+  let t=cols.map(c=>c[0]).join(',')+'\n';for(let i=0;i<N;i++)t+=cols.map(c=>f(c[1](i))).join(',')+'\n';
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv'}));a.download=`TOPMODEL_${S.site.id}_daily.csv`;
+  document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+}
+
+/* ---------- drainage network traced through the TI grid ---------- */
+// Priority flood from the gauge with "elevation" = -TI: every cell drains along its wettest corridor to the outlet.
+function buildNet(s){
+  const m=s.map,W=m.w,H=m.h,c=s.cells,n=W*H;
+  const down=new Int32Array(n).fill(-1),fill=new Int16Array(n).fill(-1),seen=new Uint8Array(n),order=new Int32Array(n);let no=0,seq=0;
+  const hk=[],hv=[];
+  const sw=(a,b)=>{let t=hk[a];hk[a]=hk[b];hk[b]=t;t=hv[a];hv[a]=hv[b];hv[b]=t;};
+  const push=(f,v)=>{hk.push(f*1e6+(999999-(seq++%1e6)));hv.push(v);let j=hk.length-1;while(j>0){const p=(j-1)>>1;if(hk[p]>=hk[j])break;sw(p,j);j=p;}};
+  const pop=()=>{const v=hv[0],lk=hk.pop(),lv=hv.pop();if(hk.length){hk[0]=lk;hv[0]=lv;let j=0;
+    for(;;){const l=2*j+1,r=l+1;let b=j;if(l<hk.length&&hk[l]>hk[b])b=l;if(r<hk.length&&hk[r]>hk[b])b=r;if(b===j)break;sw(b,j);j=b;}}return v;};
+  const flood=o=>{seen[o]=1;fill[o]=c[o];push(c[o],o);
+    while(hk.length){const i=pop();order[no++]=i;const y=(i/W)|0,x=i-y*W;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const yy=y+dy,xx=x+dx;if(yy<0||yy>=H||xx<0||xx>=W)continue;
+        const j=yy*W+xx;if(seen[j]||c[j]>30)continue;seen[j]=1;down[j]=i;fill[j]=Math.min(c[j],fill[i]);push(fill[j],j);}}};
+  let o0=-1;
+  if(m.gauge){const gx=Math.floor(m.gauge[0]),gy=Math.floor(m.gauge[1]);
+    for(let y=gy-3;y<=gy+3;y++)for(let x=gx-3;x<=gx+3;x++){if(y<0||y>=H||x<0||x>=W)continue;const j=y*W+x;if(c[j]<=30&&(o0<0||c[j]>c[o0]))o0=j;}}
+  for(;;){if(o0<0){for(let j=0;j<n;j++)if(c[j]<=30&&!seen[j]&&(o0<0||c[j]>c[o0]))o0=j;}if(o0<0)break;flood(o0);o0=-1;}
+  const acc=new Float64Array(n);for(let k=0;k<no;k++)acc[order[k]]=1;
+  for(let k=no-1;k>=0;k--){const i=order[k];if(down[i]>=0)acc[down[i]]+=acc[i];}
+  // wetting order: cells by their own index (larger upstream area first within a class); when a cell turns wet,
+  // the cells on its path to the stream turn wet first, so every prefix of the order is connected to the outlet
+  const idx=Array.from(order.subarray(0,no)).sort((a,b)=>c[b]-c[a]||acc[b]-acc[a]);
+  const rank=new Int32Array(n).fill(-1),path=[];let r=0;
+  for(const i of idx){let q=i;path.length=0;while(q>=0&&rank[q]<0){path.push(q);rank[q]=-2;q=down[q];}for(let k=path.length-1;k>=0;k--)rank[path[k]]=r++;}
+  const thr=Math.max(8,Math.round(0.5e6/(m.cellM*m.cellM)));
+  s.net={down,acc,rank,no,thr};
+}
+
 /* ---------- boot ---------- */
 (async function(){
   if(typeof DecompressionStream==='undefined'){document.body.insertAdjacentHTML('afterbegin','<p class="panel">This page needs a current browser (DecompressionStream support).</p>');return;}
-  buildSites();buildLocator();buildGroups();buildControls();
+  buildSites();buildLocator();buildGroups();buildControls();buildVarUI();
   let id=DATA.sites[0].id;try{const s=localStorage.getItem('tm_site');if(s&&DATA.sites.some(x=>x.id===s))id=s;}catch(e){}
   await selectSite(id);
 })();
