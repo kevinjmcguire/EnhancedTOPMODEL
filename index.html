@@ -186,7 +186,7 @@ a{color:var(--sim)}
             </div>
             <div class="row hint" style="margin-top:6px"><button class="btn" id="followBtn" type="button">Follow hydrograph</button><span id="pinNote">Showing the hover day, or the peak flow day.</span></div></figure>
         </div>
-        <p class="note" style="margin-bottom:0">Wetter (higher index) cells saturate first. With the overlay on, the orange area holds as many cells as the model's saturated fraction on the day shown (the model tracks area by index class, not by location). <b>Connected to the stream</b> places them along drainage paths: cells still wet up in order of their index, but each cell is routed to the gauge along its wettest corridor through the index grid, and when a cell turns wet its path to the stream does too, so saturation shows as one network spreading up from the outlet instead of scattered wet pixels. <b>Wettest cells</b> shows the plain index ranking, which breaks up because averaging to coarse cells dilutes narrow valley bottoms. Drainage lines are traced the same way (the page has no DEM), so they follow the index valleys, not mapped streams. By default the day follows the hydrograph hover, or the largest simulated flow in the evaluation window. Click the hydrograph, drag the slider or press Play to pin a day and step through time. The map is the 30 m index averaged to 90–180 m cells, so its wet tail is smoother than the classes the model uses. Hover the map for a cell's index and upstream area.</p>
+        <p class="note" style="margin-bottom:0">Wetter (higher index) cells saturate first. With the overlay on, the orange area holds as many cells as the model's saturated fraction on the day shown (the model tracks area by index class, not by location). <b>Connected to the stream</b> places them along drainage paths: the saturated area grows outward from the gauge, each step adding the wettest cell on its edge, with wetness = index plus a bonus for upstream area to make up for channel wetness lost when the grid was coarsened. With little saturation it follows the channels as one connected network; in wet conditions it spreads beyond them into hollows, footslopes and flat valley floors and approaches the plain index pattern. <b>Wettest cells</b> shows the plain index ranking, which breaks up because averaging to coarse cells dilutes narrow valley bottoms. Drainage lines are traced the same way (the page has no DEM), so they follow the index valleys, not mapped streams. By default the day follows the hydrograph hover, or the largest simulated flow in the evaluation window. Click the hydrograph, drag the slider or press Play to pin a day and step through time. The map is the 30 m index averaged to 90–180 m cells, so its wet tail is smoother than the classes the model uses. Hover the map for a cell's index and upstream area.</p>
       </div>
 
       <div class="panel">
@@ -927,7 +927,7 @@ function drawMap(){
     satLevel=L;}
   $('satDay').textContent=sat?`${dateOf(d)} (${(S.out.satFrac[d]*100).toFixed(1)}% saturated)`:dateOf(d);
   const off=document.createElement('canvas');off.width=m.w;off.height=m.h;const ic=off.getContext('2d'),img=ic.createImageData(m.w,m.h);
-  for(let i=0;i<m.w*m.h;i++){const v=s.cells[i];if(v>30)continue;const ti=cellTI(v);const isSat=conn?net.rank[i]<nSat:(satLevel!==null&&v>=satLevel);const rgb=isSat?SATRGB:rampColor((ti-TI_LO)/(TI_HI-TI_LO));
+  for(let i=0;i<m.w*m.h;i++){const v=s.cells[i];if(v>30)continue;const ti=cellTI(v);const isSat=!conn&&satLevel!==null&&v>=satLevel;const rgb=isSat?SATRGB:rampColor((ti-TI_LO)/(TI_HI-TI_LO));
     img.data[4*i]=rgb[0];img.data[4*i+1]=rgb[1];img.data[4*i+2]=rgb[2];img.data[4*i+3]=255;}
   ic.putImageData(img,0,0);c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';c.drawImage(off,ox,oy,m.w*sc,m.h*sc);
   // drainage lines and connected saturated channels (cell centre to downstream cell centre)
@@ -936,8 +936,10 @@ function drawMap(){
       for(let i=0;i<net.down.length;i++){const a=net.acc[i];if(a<net.thr||net.down[i]<0)continue;const j=net.down[i];
         c.lineWidth=Math.min(Math.max(0.7,sc*0.22)*(1+0.8*Math.log10(a/net.thr)),Math.max(sc*0.9,1.5),4);c.beginPath();c.moveTo(cx(i),cy(i));c.lineTo(cx(j),cy(j));c.stroke();}
       c.globalAlpha=1;}
-    if(conn&&nSat>0){c.strokeStyle=`rgb(${SATRGB})`;c.lineWidth=Math.max(sc*0.85,1.6);
-      for(let i=0;i<net.down.length;i++){const j=net.down[i];if(j<0||net.rank[i]<0||net.rank[i]>=nSat||net.acc[i]<2)continue;c.beginPath();c.moveTo(cx(i),cy(i));c.lineTo(cx(j),cy(j));c.stroke();}}
+    if(conn&&nSat>0){c.fillStyle=`rgb(${SATRGB})`;
+      for(let i=0;i<net.rank.length;i++){const r=net.rank[i];if(r<0||r>=nSat)continue;c.fillRect(ox+(i%W)*sc-.3,oy+((i/W)|0)*sc-.3,sc+.6,sc+.6);}
+      c.strokeStyle=`rgb(${SATRGB})`;c.lineWidth=Math.max(sc*0.55,1.4);
+      for(let i=0;i<net.down.length;i++){const j=net.down[i];if(j<0||net.rank[i]<0||net.rank[i]>=nSat||net.rank[j]>=nSat||net.acc[i]<Math.max(3,net.thr/4))continue;c.beginPath();c.moveTo(cx(i),cy(i));c.lineTo(cx(j),cy(j));c.stroke();}}
     c.lineCap='butt';}
   // outline
   c.strokeStyle=col('fg');c.lineWidth=1.2;c.lineJoin='round';
@@ -1193,7 +1195,7 @@ function buildNet(s){
   const down=new Int32Array(n).fill(-1),fill=new Int16Array(n).fill(-1),seen=new Uint8Array(n),order=new Int32Array(n);let no=0,seq=0;
   const hk=[],hv=[];
   const sw=(a,b)=>{let t=hk[a];hk[a]=hk[b];hk[b]=t;t=hv[a];hv[a]=hv[b];hv[b]=t;};
-  const push=(f,v)=>{hk.push(f*1e6+(999999-(seq++%1e6)));hv.push(v);let j=hk.length-1;while(j>0){const p=(j-1)>>1;if(hk[p]>=hk[j])break;sw(p,j);j=p;}};
+  const push=(f,v)=>{hk.push(Math.round(f*1000)*1e6+(999999-(seq++%1e6)));hv.push(v);let j=hk.length-1;while(j>0){const p=(j-1)>>1;if(hk[p]>=hk[j])break;sw(p,j);j=p;}};
   const pop=()=>{const v=hv[0],lk=hk.pop(),lv=hv.pop();if(hk.length){hk[0]=lk;hv[0]=lv;let j=0;
     for(;;){const l=2*j+1,r=l+1;let b=j;if(l<hk.length&&hk[l]>hk[b])b=l;if(r<hk.length&&hk[r]>hk[b])b=r;if(b===j)break;sw(b,j);j=b;}}return v;};
   const flood=o=>{seen[o]=1;fill[o]=c[o];push(c[o],o);
@@ -1206,11 +1208,15 @@ function buildNet(s){
   for(;;){if(o0<0){for(let j=0;j<n;j++)if(c[j]<=30&&!seen[j]&&(o0<0||c[j]>c[o0]))o0=j;}if(o0<0)break;flood(o0);o0=-1;}
   const acc=new Float64Array(n);for(let k=0;k<no;k++)acc[order[k]]=1;
   for(let k=no-1;k>=0;k--){const i=order[k];if(down[i]>=0)acc[down[i]]+=acc[i];}
-  // wetting order: cells by their own index (larger upstream area first within a class); when a cell turns wet,
-  // the cells on its path to the stream turn wet first, so every prefix of the order is connected to the outlet
-  const idx=Array.from(order.subarray(0,no)).sort((a,b)=>c[b]-c[a]||acc[b]-acc[a]);
-  const rank=new Int32Array(n).fill(-1),path=[];let r=0;
-  for(const i of idx){let q=i;path.length=0;while(q>=0&&rank[q]<0){path.push(q);rank[q]=-2;q=down[q];}for(let k=path.length-1;k>=0;k--)rank[path[k]]=r++;}
+  // wetting order: grow the saturated area outward from the outlet, always adding the wettest cell on its edge.
+  // Wetness = index class + log10(upstream cells), which restores some of the channel wetness lost by coarsening.
+  // Every prefix is connected; when few cells are wet it follows the channels, when many are wet it spreads
+  // into hollows, footslopes and flats beside them, approaching the plain index ranking.
+  const wet=j=>c[j]+Math.log10(acc[j]),rank=new Int32Array(n).fill(-1),done=new Uint8Array(n);let r=0;seq=0;
+  for(let j=0;j<n;j++)if(c[j]<=30&&down[j]<0){done[j]=1;push(wet(j),j);}
+  while(hk.length){const i=pop();rank[i]=r++;const y=(i/W)|0,x=i-y*W;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const yy=y+dy,xx=x+dx;if(yy<0||yy>=H||xx<0||xx>=W)continue;
+      const j=yy*W+xx;if(done[j]||c[j]>30)continue;done[j]=1;push(wet(j),j);}}
   const thr=Math.max(8,Math.round(0.5e6/(m.cellM*m.cellM)));
   s.net={down,acc,rank,no,thr};
 }
