@@ -6,3 +6,4 @@ pynhd
 py3dep
 pydaymet
 pygeohydro
+pygridmet

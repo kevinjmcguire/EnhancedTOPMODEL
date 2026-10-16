@@ -113,18 +113,114 @@ def fetch_dem(geom_wkt, buffer_m=1000, res=30):
     return dict(z=z, x0=float(x[0] - cell / 2), y0=float(y[0] + cell / 2), cell=cell)
 
 
-def fetch_daymet(geom_wkt):
+def sample_points(geom_wkt, n=16):
+    """About n points spread evenly inside the basin (lon, lat), like the 16 Daymet pixels of the original basins."""
+    from shapely import wkt
+    from shapely.geometry import Point
+    g = wkt.loads(geom_wkt)
+    x0, y0, x1, y1 = g.bounds
+    for k in range(4, 40):
+        xs = np.linspace(x0, x1, k + 2)[1:-1]
+        ys = np.linspace(y0, y1, k + 2)[1:-1]
+        pts = [(x, y) for y in ys for x in xs if g.contains(Point(x, y))]
+        if len(pts) >= n:
+            idx = np.linspace(0, len(pts) - 1, n).round().astype(int)
+            return [pts[i] for i in idx]
+    c = g.representative_point()
+    return [(c.x, c.y)]
+
+
+DAYMET_VARS = ['prcp', 'tmax', 'tmin', 'srad', 'vp', 'dayl']
+
+
+def _daymet_point(lon, lat):
+    """Daymet single-pixel API (no login). Daymet's calendar has 365 days; in leap years Dec 31 is dropped."""
+    import urllib.request
+    url = ('https://daymet.ornl.gov/single-pixel/api/data?lat=%.5f&lon=%.5f&vars=%s&start=%s&end=%s'
+           % (lat, lon, ','.join(DAYMET_VARS), DATES[0], DATES[1]))
+    req = urllib.request.Request(url, headers={'User-Agent': 'EnhancedTOPMODEL-add_sites'})
+    txt = urllib.request.urlopen(req, timeout=120).read().decode()
+    lines = txt.splitlines()
+    h = next(i for i, ln in enumerate(lines) if ln.startswith('year,yday'))
+    cols = [c.split(' (')[0] for c in lines[h].split(',')]
+    rows = [ln.split(',') for ln in lines[h + 1:] if ln.strip()]
+    tab = {c: np.array([float(r[i]) for r in rows]) for i, c in enumerate(cols)}
+    import datetime
+    dates = [(datetime.date(int(y), 1, 1) + datetime.timedelta(days=int(d) - 1)).isoformat() for y, d in zip(tab['year'], tab['yday'])]
+    return dates, {v: tab[v] for v in DAYMET_VARS}
+
+
+def fetch_daymet_points(geom_wkt):
+    pts = sample_points(geom_wkt)
+    acc, dates = None, None
+    for lon, lat in pts:
+        dates, t = _daymet_point(lon, lat)
+        acc = t if acc is None else {v: acc[v] + t[v] for v in DAYMET_VARS}
+    out = {v: acc[v] / len(pts) for v in DAYMET_VARS}
+    out.update(dates=dates, npix=len(pts), source=f'Daymet v4, mean of {len(pts)} pixels')
+    return out
+
+
+def fetch_daymet_grid(geom_wkt):
+    """Gridded Daymet through pydaymet (ORNL THREDDS). Needs a NASA Earthdata login in ~/.netrc."""
     pydaymet = _need('pydaymet')
     from shapely import wkt
     g = wkt.loads(geom_wkt)
-    ds = pydaymet.get_bygeom(g, DATES, variables=['prcp', 'tmax', 'tmin', 'srad', 'vp', 'dayl'], crs=4326)
+    ds = pydaymet.get_bygeom(g, DATES, variables=DAYMET_VARS, crs=4326)
     out = {}
-    for v in ['prcp', 'tmax', 'tmin', 'srad', 'vp', 'dayl']:
+    for v in DAYMET_VARS:
         a = ds[v]
         out[v] = a.mean(dim=[d for d in a.dims if d != 'time'], skipna=True).values.astype(float)
     out['dates'] = [str(t)[:10] for t in ds['time'].values]
     out['npix'] = int(np.isfinite(ds['prcp'].isel(time=0).values).sum())
+    out['source'] = f"Daymet v4, mean of {out['npix']} pixels"
     return out
+
+
+def fetch_gridmet(geom_wkt, zmean):
+    """gridMET 4 km (no login), put on Daymet's calendar (Dec 31 dropped in leap years)."""
+    pygridmet = _need('pygridmet')
+    from shapely import wkt
+    g = wkt.loads(geom_wkt)
+    ds = pygridmet.get_bygeom(g, DATES, variables=['pr', 'tmmn', 'tmmx', 'srad', 'sph'], crs=4326)
+
+    def pick(*names):
+        for k in ds.data_vars:
+            if any(n in k.lower() for n in names):
+                a = ds[k]
+                return a.mean(dim=[d for d in a.dims if d != 'time'], skipna=True).values.astype(float)
+        raise KeyError(f'gridMET variable {names} not found in {list(ds.data_vars)}')
+    pr = pick('pr', 'precip'); tmn = pick('tmmn', 'minimum_temp'); tmx = pick('tmmx', 'maximum_temp')
+    srad = pick('srad', 'shortwave', 'radiation'); sph = pick('sph', 'specific_hum')
+    if np.nanmean(tmx) > 100:  # Kelvin
+        tmn, tmx = tmn - 273.15, tmx - 273.15
+    pres = 101325 * (1 - 2.25577e-5 * zmean) ** 5.25588
+    vp = sph * pres / (0.622 + 0.378 * sph)
+    dates = [str(t)[:10] for t in ds['time'].values]
+    keep = [i for i, d in enumerate(dates) if not (d.endswith('-12-31') and int(d[:4]) % 4 == 0)]
+    sel = lambda a: np.asarray(a)[keep]  # noqa: E731
+    return dict(prcp=sel(pr), tmax=sel(tmx), tmin=sel(tmn), srad=sel(srad), dayl=np.full(len(keep), 86400.0),
+                vp=sel(vp), dates=[dates[i] for i in keep], npix=0, source='gridMET (4 km), basin mean')
+
+
+def fetch_forcing(geom_wkt, zmean):
+    errors = []
+    for name, fn in [('Daymet point service', lambda: fetch_daymet_points(geom_wkt)),
+                     ('Daymet gridded (Earthdata login)', lambda: fetch_daymet_grid(geom_wkt)),
+                     ('gridMET', lambda: fetch_gridmet(geom_wkt, zmean))]:
+        try:
+            out = fn()
+            if len(out['dates']) != N:
+                raise ValueError(f"{len(out['dates'])} days returned, expected {N}")
+            log(f'    forcing: {out["source"]}')
+            return out
+        except BaseException as e:  # noqa: BLE001 - try the next source
+            if isinstance(e, KeyboardInterrupt):
+                raise
+            msg = str(e).splitlines()[0][:160] if str(e) else type(e).__name__
+            log(f'    {name} failed: {msg}')
+            errors.append(f'{name}: {msg}')
+    raise SystemExit('No forcing source worked:\n  ' + '\n  '.join(errors))
 
 
 def fetch_q_cfs(site_id):
@@ -308,7 +404,7 @@ def build_site(meta, basin, dem, met, q_cfs, nlcd, nhd_km, us_proj, iters=1200, 
     Q = np.array([q_cfs.get(d, np.nan) for d in dates], float)
     Q = np.where(Q >= 0, Q * 0.0283168 * 86400 / (area_km2 * 1e6) * 1000, np.nan)
     log(f'    discharge: {np.isfinite(Q).sum()} of {N} days, mean {np.nanmean(Q[SPIN:]) * 365:.0f} mm/yr; '
-        f'precip {P[SPIN:].mean() * 365:.0f} mm/yr from {met.get("npix", "?")} Daymet pixels')
+        f'precip {P[SPIN:].mean() * 365:.0f} mm/yr ({met.get("source", "Daymet")})')
     pack = encode_pack(P, Tx, Tn, Rs, ea, Q)
 
     # decode exactly as the page does (rounded values) so the preset is fitted to what the page will run
@@ -326,7 +422,8 @@ def build_site(meta, basin, dem, met, q_cfs, nlcd, nhd_km, us_proj, iters=1200, 
     site['lc'] = dict(forest=pct(fr['forest']), ag=pct(ag), grass=pct(fr['grass'] + fr['shrub']), developed=pct(fr['developed']),
                       water=pct(fr['water'] + fr['wetland']), imp=round(fr['imp'], 1))
     site['note'] = (f"{meta['setting'].lower()}; {pct(fr['forest'])}% forest, {pct(ag)}% agriculture, "
-                    f"{pct(fr['developed'])}% developed ({fr['imp']:.0f}% impervious), NLCD 2011")
+                    f"{pct(fr['developed'])}% developed ({fr['imp']:.0f}% impervious), NLCD 2011"
+                    + ('' if met.get('source', 'Daymet').startswith('Daymet') else f"; forcing from {met['source']}"))
     if nhd_km is not None:
         site['nhdKm'] = round(nhd_km, 1)
 
@@ -369,7 +466,8 @@ def main():
         log(f"{sid} {meta['name']} {meta['loc']}")
         basin = cached(sid, 'basin', lambda: fetch_basin(sid))
         dem = cached(sid, 'dem', lambda: fetch_dem(basin['geom_wkt']))
-        met = cached(sid, 'daymet', lambda: fetch_daymet(basin['geom_wkt']))
+        zmean = float(np.nanmean(np.where(dem['z'] > -1000, dem['z'], np.nan)))
+        met = cached(sid, 'forcing', lambda: fetch_forcing(basin['geom_wkt'], zmean))
         q = cached(sid, 'nwis', lambda: fetch_q_cfs(sid))
         nlcd = cached(sid, 'nlcd', lambda: fetch_nlcd(basin['geom_wkt']))
         try:
