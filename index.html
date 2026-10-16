@@ -193,14 +193,17 @@ a{color:var(--sim)}
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
           <h2 style="margin:0">Daily discharge</h2>
           <div class="row">
+            <button class="btn" id="btnOut" type="button" disabled title="Double the time span shown">Zoom out</button>
+            <button class="btn" id="btnFull" type="button" disabled title="Show all of 2009–2013 (or double-click a chart)">Full extent</button>
             <div class="seg" id="segRange" role="group" aria-label="Period"></div>
             <div class="seg" id="segScale" role="group" aria-label="Scale">
               <button type="button" data-v="log" aria-pressed="true">Log</button><button type="button" data-v="lin" aria-pressed="false">Linear</button>
             </div>
           </div>
         </div>
-        <div class="hoverline" id="hover">Hover the plot for daily values.</div>
+        <div class="row" style="justify-content:space-between;gap:4px 12px"><div class="hoverline" id="hover">Hover the plot for daily values.</div><span class="hint" id="zoomInfo">Drag across the plot to zoom.</span></div>
         <canvas class="chart" id="cHyd" style="height:340px" aria-label="Observed and simulated daily discharge with precipitation"></canvas>
+        <p class="hint" style="margin:6px 0 0">Drag across the plot (or any daily chart below) to zoom; every daily chart follows. Click to pin the map day, double-click or Full extent to reset.</p>
         <div class="legend"><span><i style="background:var(--obs)"></i>Observed (USGS)</span><span><i style="background:var(--sim)"></i>Simulated</span><span><i class="b" style="background:var(--pcp)"></i>Precipitation (Daymet)</span><span>Shaded: 2009 spin-up</span></div>
       </div>
 
@@ -584,7 +587,7 @@ const CUM=[0,31,59,90,120,151,181,212,243,273,304,334,365], MN=['Jan','Feb','Mar
 const monthOf=i=>{const d=i%365;let m=0;while(m<11&&d>=CUM[m+1])m++;return m;};
 const dateOf=i=>{const y=2009+Math.floor(i/365),d=i%365,m=monthOf(i);return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d-CUM[m]+1).padStart(2,'0');};
 
-const S={mapDay:-1,playing:false,site:null,params:{},cache:{},evalSel:'all',scale:'log',range:'all',hoverIdx:-1,out:null,busy:false};
+const S={view:[0,1825],drag:null,mapDay:-1,playing:false,site:null,params:{},cache:{},evalSel:'all',scale:'log',range:'all',hoverIdx:-1,out:null,busy:false};
 const $=id=>document.getElementById(id);
 const fmt=(x,d=2)=>Number.isFinite(x)?x.toFixed(d):'–';
 
@@ -755,24 +758,63 @@ function drawTS(cv,o){
   for(const v of yt){const y=Math.round(Y(v))+.5;c.beginPath();c.moveTo(L,y);c.lineTo(w-R,y);c.stroke();c.fillText(yfmt(v),L-5,y);}
   // spin-up shade
   if(o.shade&&x0<SPIN){c.fillStyle=col('shade');c.fillRect(L,T,X(Math.min(SPIN,x1))-L,yB-T);}
-  // x ticks
-  c.fillStyle=col('muted');c.textAlign='center';c.textBaseline='top';
-  if(x1-x0<=400){for(let i=Math.ceil(x0);i<x1;i++){const d=i%365;if(CUM.includes(d)&&d<365){const x=X(i);c.fillText(MN[monthOf(i)],Math.min(Math.max(x+8,L+10),w-R-10),yB+3);c.strokeStyle=col('line');c.beginPath();c.moveTo(x+.5,yB);c.lineTo(x+.5,yB+3);c.stroke();}}}
-  else{for(let y=0;y<5;y++){const i=y*365;if(i>=x0&&i<x1){const x=X(i);c.strokeStyle=col('line');c.beginPath();c.moveTo(x+.5,yT);c.lineTo(x+.5,yB+3);c.stroke();c.fillText(2009+y,Math.min(x+16,w-R-14),yB+3);}}}
+  xAxis(c,col,X,x0,x1,L,R,w,yT,yB);
   // precip bars
-  if(o.precip){const pm=Math.max(...Array.from(o.precip.subarray(x0,x1)),1),bw=Math.max(1,pw/(x1-x0));c.fillStyle=col('pcp');
-    for(let i=x0;i<x1;i++){const v=o.precip[i];if(v>0){const hh=v/pm*ph;c.fillRect(X(i),T,bw,hh);}}
+  if(o.precip){const pm=Math.max(...Array.from(o.precip.subarray(x0,x1)),1),bw=Math.max(1,pw/(x1-x0)*(x1-x0<200?0.8:1));c.fillStyle=col('pcp');
+    const bo=x1-x0<200?pw/(x1-x0)*0.1:0;for(let i=x0;i<x1;i++){const v=o.precip[i];if(v>0){const hh=v/pm*ph;c.fillRect(X(i)+bo,T,bw,hh);}}
     c.fillStyle=col('muted');c.textAlign='right';c.textBaseline='top';c.fillText(fnum(pm)+' mm',L-5,T);}
   // series
   c.save();c.beginPath();c.rect(L,T,pw,yB-T);c.clip();
   for(const s of o.series){c.strokeStyle=col(s.color);c.lineWidth=s.lw||1.3;c.setLineDash(s.dash||[]);c.lineJoin='round';c.beginPath();let pen=false;
-    for(let i=x0;i<x1;i++){const v=s.y[i];if(!Number.isFinite(v)){pen=false;continue;}const x=X(i),y=Y(v);if(!pen){c.moveTo(x,y);pen=true;}else c.lineTo(x,y);}
+    const off=x1-x0<120?.5:0;for(let i=x0;i<x1;i++){const v=s.y[i];if(!Number.isFinite(v)){pen=false;continue;}const x=X(i+off),y=Y(v);if(!pen){c.moveTo(x,y);pen=true;}else c.lineTo(x,y);}
     c.stroke();}
   c.restore();c.setLineDash([]);
-  if(o.hover>=x0&&o.hover<x1){c.strokeStyle=col('muted');c.lineWidth=1;const x=Math.round(X(o.hover))+.5;c.beginPath();c.moveTo(x,T);c.lineTo(x,yB);c.stroke();}
+  if(o.hover>=x0&&o.hover<x1){c.strokeStyle=col('muted');c.lineWidth=1;const x=Math.round(X(o.hover+(x1-x0<120?.5:0)))+.5;c.beginPath();c.moveTo(x,T);c.lineTo(x,yB);c.stroke();}
+  drawSel(c,col,cv,X,T,yB,x0,x1);
   return{L,pw,x0,x1};
 }
-function rangeBounds(){if(S.range==='all')return[0,N];const y=+S.range-2009;return[y*365,(y+1)*365];}
+function rangeBounds(){return S.view;}
+function setView(a,b){
+  a=Math.round(a);b=Math.round(b);if(b-a<7){const m=(a+b)/2;a=Math.round(m-3.5);b=a+7;}
+  if(a<0){b-=a;a=0;}if(b>N){a-=b-N;b=N;}a=Math.max(a,0);
+  S.view=[a,b];const yr=a%365===0&&b-a===365?String(2009+a/365):(a===0&&b===N?'all':'');
+  $('segRange').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===yr));
+  const full=a===0&&b===N;$('btnFull').disabled=full;$('btnOut').disabled=full;
+  $('zoomInfo').textContent=full?'Drag across the plot to zoom.':`${dateOf(a)} to ${dateOf(b-1)} · ${b-a} days`;
+  drawTimeCharts();
+}
+function zoomOut(){const [a,b]=S.view,m=(a+b)/2,h=b-a;setView(m-h,m+h);}
+function drawTimeCharts(){if(!S.site||!S.out)return;drawHyd();drawStrips();drawStates();}
+// time axis shared by all daily charts: years, months or days depending on span
+function xAxis(c,col,X,x0,x1,L,R,w,yT,yB){
+  c.fillStyle=col('muted');c.textAlign='center';c.textBaseline='top';c.strokeStyle=col('line');c.lineWidth=1;
+  const span=x1-x0,tk=(x,lab,full)=>{c.beginPath();c.moveTo(x+.5,full?yT:yB);c.lineTo(x+.5,yB+3);c.stroke();if(lab)c.fillText(lab,Math.min(Math.max(x,L+12),w-R-12),yB+3);};
+  if(span>500){for(let y=0;y<=5;y++){const i=y*365;if(i>=x0&&i<x1){const x=X(i);c.beginPath();c.moveTo(x+.5,yT);c.lineTo(x+.5,yB+3);c.stroke();c.textAlign='left';c.fillText(2009+y,Math.min(x+4,w-R-28),yB+3);c.textAlign='center';}}}
+  else if(span>75){const every=span>250?1:1;for(let i=Math.ceil(x0);i<x1;i++){const d=i%365;if(CUM.includes(d)&&d<365){const m=monthOf(i);tk(X(i),null,d===0);c.textAlign='left';
+      c.fillText(MN[m]+(m===0||i===Math.ceil(x0)?" '"+String(2009+Math.floor(i/365)).slice(2):''),Math.min(X(i)+3,w-R-36),yB+3);c.textAlign='center';}}}
+  else{const st=span>40?7:span>20?5:span>10?2:1,o=span<120?.5:0;let first=true;for(let i=Math.ceil(x0);i<x1;i++){const d=i%365;let m=0;while(m<11&&d>=CUM[m+1])m++;const dm=d-CUM[m]+1;
+      if(dm===1){tk(X(i+o),MN[m]+' 1',true);first=false;}else if((dm-1)%st===0&&dm<=CUM[m+1]-CUM[m]-st/2){tk(X(i+o),first?MN[m]+' '+dm:String(dm),false);first=false;}}}
+}
+function drawSel(c,col,cv,X,yT,yB,x0,x1){
+  const d=S.drag;if(!d||!d.moved||d.cv!==cv)return;const a=Math.max(Math.min(d.start,d.cur),x0),b=Math.min(Math.max(d.start,d.cur)+1,x1);
+  c.fillStyle=col('sim');c.globalAlpha=.15;c.fillRect(X(a),yT,X(b)-X(a),yB-yT);c.globalAlpha=.6;c.strokeStyle=col('sim');c.strokeRect(X(a)+.5,yT+.5,X(b)-X(a)-1,yB-yT-1);c.globalAlpha=1;
+}
+// drag to zoom, click to pin the map day, hover to read values
+function attachZoom(cv,geom,onHover,onLeave){
+  const idxAt=e=>{const g=geom();if(!g)return null;const r=cv.getBoundingClientRect();return Math.floor(g.x0+(e.clientX-r.left-g.L)/g.pw*(g.x1-g.x0));};
+  const clampI=i=>{const g=geom();return Math.min(Math.max(i,g.x0),g.x1-1);};
+  cv.style.cursor='crosshair';cv.style.touchAction='pan-y';
+  cv.addEventListener('pointerdown',e=>{if(e.button>0||!geom())return;const i=idxAt(e);if(i==null)return;S.drag={cv,start:clampI(i),cur:clampI(i),x:e.clientX,moved:false};try{cv.setPointerCapture(e.pointerId);}catch(_){}});
+  cv.addEventListener('pointermove',e=>{const d=S.drag;
+    if(d&&d.cv===cv){const i=idxAt(e);if(i==null)return;d.cur=clampI(i);if(Math.abs(e.clientX-d.x)>4)d.moved=true;if(d.moved){drawTimeCharts();return;}}
+    const i=idxAt(e);const g=geom();if(i==null||i<g.x0||i>=g.x1)return;onHover(i);});
+  cv.addEventListener('pointerup',e=>{const d=S.drag;if(!d||d.cv!==cv)return;S.drag=null;
+    if(d.moved){const a=Math.min(d.start,d.cur),b=Math.max(d.start,d.cur)+1;setView(a,b);}
+    else{setMapDay(d.start);onHover(d.start);}});
+  cv.addEventListener('pointercancel',()=>{S.drag=null;drawTimeCharts();});
+  cv.addEventListener('dblclick',()=>setView(0,N));
+  cv.addEventListener('pointerleave',()=>{if(!S.drag)onLeave();});
+}
 let hydGeom=null;
 function drawHyd(){
   const [a,b]=rangeBounds();const o=S.out,s=S.site;
@@ -802,16 +844,25 @@ function drawFdc(){
   const ln=(a,cn)=>{c.strokeStyle=col(cn);c.lineWidth=1.6;c.beginPath();a.forEach((v,i)=>{const x=X(i/(a.length-1)),y=Y(v);i?c.lineTo(x,y):c.moveTo(x,y);});c.stroke();};
   ln(qo,'obs');ln(qs,'sim');
 }
-function drawState(id,arr,scale,cn,fill){
-  const col=css(),cv=$(id),{c,w,h}=setup(cv),L=34,R=6,T=6,B=16,x0=0,x1=N;
-  const v=Float64Array.from(arr,x=>x*scale);let mx=Math.max(...v,1e-6)*1.08;const yt=ticks(0,mx,3),Y=q=>h-B-q/mx*(h-B-T),X=i=>L+i/N*(w-L-R);
+const stateGeom={};
+function drawState(id,arr,scale,cn){
+  const col=css(),cv=$(id),{c,w,h}=setup(cv),L=34,R=6,T=6,B=16,[x0,x1]=S.view,pw=w-L-R;
+  const v=Float64Array.from(arr,x=>x*scale);let mx=1e-6;for(let i=x0;i<x1;i++)if(v[i]>mx)mx=v[i];mx*=1.08;
+  const yt=ticks(0,mx,3),Y=q=>h-B-q/mx*(h-B-T),X=i=>L+(i-x0)/(x1-x0)*pw;
   c.strokeStyle=col('line');c.fillStyle=col('muted');c.textAlign='right';c.textBaseline='middle';
   for(const t of yt){const y=Math.round(Y(t))+.5;c.beginPath();c.moveTo(L,y);c.lineTo(w-R,y);c.stroke();c.fillText(fnum(t),L-4,y);}
-  c.fillStyle=col('shade');c.fillRect(L,T,X(SPIN)-L,h-B-T);
-  c.textAlign='center';c.textBaseline='top';c.fillStyle=col('muted');for(let y=1;y<5;y++)c.fillText("'"+String(2009+y).slice(2),X(y*365),h-B+3);
-  c.beginPath();c.moveTo(X(0),Y(0));for(let i=0;i<N;i++)c.lineTo(X(i),Y(v[i]));c.lineTo(X(N-1),Y(0));c.closePath();
-  c.globalAlpha=.25;c.fillStyle=col(cn);c.fill();c.globalAlpha=1;c.strokeStyle=col(cn);c.lineWidth=1.2;c.beginPath();for(let i=0;i<N;i++)i?c.lineTo(X(i),Y(v[i])):c.moveTo(X(i),Y(v[i]));c.stroke();
+  if(x0<SPIN){c.fillStyle=col('shade');c.fillRect(L,T,X(Math.min(SPIN,x1))-L,h-B-T);}
+  xAxis(c,col,X,x0,x1,L,R,w,T,h-B);
+  c.save();c.beginPath();c.rect(L,T,pw,h-B-T);c.clip();
+  const po=x1-x0<120?.5:0,XP=i=>X(i+po);
+  c.beginPath();c.moveTo(XP(x0),Y(0));for(let i=x0;i<x1;i++)c.lineTo(XP(i),Y(v[i]));c.lineTo(XP(x1-1),Y(0));c.closePath();
+  c.globalAlpha=.25;c.fillStyle=col(cn);c.fill();c.globalAlpha=1;c.strokeStyle=col(cn);c.lineWidth=1.2;c.beginPath();for(let i=x0;i<x1;i++)i>x0?c.lineTo(XP(i),Y(v[i])):c.moveTo(XP(i),Y(v[i]));c.stroke();
+  c.restore();
+  const hv=S.mapDay>=0?S.mapDay:S.hoverIdx;if(hv>=x0&&hv<x1){c.strokeStyle=col('muted');c.lineWidth=1;const x=Math.round(XP(hv))+.5;c.beginPath();c.moveTo(x,T);c.lineTo(x,h-B);c.stroke();}
+  drawSel(c,col,cv,X,T,h-B,x0,x1);
+  stateGeom[id]={L,pw,x0,x1};
 }
+function drawStates(){if(!S.out)return;drawState('cSwe',S.out.SWE,1,'sim');drawState('cSat',S.out.satFrac,100,'et');}
 function drawTI(){
   const col=css(),{c,w,h}=setup($('cTi')),L=34,R=6,T=6,B=18,s=S.site,v=s.val,f=s.frac,tot=f.reduce((a,b)=>a+b,0);
   const mx=Math.max(...f)/tot*1.1,lo=v[0]-.3,hi=v[v.length-1]+.3,X=t=>L+(t-lo)/(hi-lo)*(w-L-R),Y=p=>h-B-p/mx*(h-B-T);
@@ -826,7 +877,7 @@ function drawTI(){
 function draw(){
   if(!S.site||!S.out)return;
   drawHyd();drawMonthly();drawFdc();drawMap();
-  drawState('cSwe',S.out.SWE,1,'sim');drawState('cSat',S.out.satFrac,100,'et');drawTI();drawStrips();
+  drawStates();drawTI();drawStrips();
 }
 
 /* ---------- maps ---------- */
@@ -849,7 +900,7 @@ function satDay(){return S.mapDay>=0?S.mapDay:(S.hoverIdx>=0?S.hoverIdx:peakDay(
 function setMapDay(d){S.mapDay=Math.max(0,Math.min(N-1,Math.round(d)));$('daySlider').value=S.mapDay;$('satToggle').checked=true;$('pinNote').textContent='Pinned to '+dateOf(S.mapDay)+'.';}
 let lastT=0,acc=0;
 function tick(t){if(!S.playing)return;const dt=Math.min((t-lastT)/1000,0.25);lastT=t;acc+=dt*(+$('speedSel').value);const st=Math.floor(acc);
-  if(st>0){acc-=st;let d=S.mapDay+st;if(d>=N)d=0;setMapDay(d);drawMap();drawHyd();drawStrips();}requestAnimationFrame(tick);}
+  if(st>0){acc-=st;let d=S.mapDay+st;if(d>=N)d=0;setMapDay(d);const [va,vb]=S.view;if(vb-va<N&&(d<va||d>=vb)){const sp=vb-va;setView(d>=vb?d:d,d+sp);}drawMap();drawHyd();drawStrips();drawStates();}requestAnimationFrame(tick);}
 function stopPlay(){S.playing=false;$('playBtn').textContent='Play';$('playBtn').setAttribute('aria-pressed','false');}
 function togglePlay(){
   if(S.playing){stopPlay();return;}
@@ -931,9 +982,9 @@ let mapPend=false;function schedMap(){if(mapPend)return;mapPend=true;requestAnim
 function setHover(i){
   S.hoverIdx=i;const s=S.site,o=S.out;
   $('hover').textContent=`${dateOf(i)}  P ${fmt(s.F.P[i],1)}  Tmean ${fmt((s.F.Tmax[i]+s.F.Tmin[i])/2,1)}°C  LAI ${fmt(o.LAI[i],2)}  PET ${fmt(o.PET[i],2)}  ET ${fmt(o.ET[i],2)}  SWE ${fmt(o.SWE[i],0)} mm  Sat ${fmt(100*o.satFrac[i],1)}%  Q obs ${fmt(s.Q[i],2)}  Q sim ${fmt(o.Qsim[i],2)} mm/d`;
-  drawHyd();drawStrips();if($('satToggle').checked)schedMap();
+  drawHyd();drawStrips();drawStates();if($('satToggle').checked)schedMap();
 }
-function clearHover(){S.hoverIdx=-1;$('hover').textContent='Hover the plot for daily values.';if(S.site&&S.out){drawHyd();drawStrips();if($('satToggle').checked)schedMap();}}
+function clearHover(){S.hoverIdx=-1;$('hover').textContent='Hover the plot for daily values.';if(S.site&&S.out){drawHyd();drawStrips();drawStates();if($('satToggle').checked)schedMap();}}
 function hoverAt(e){
   if(!hydGeom)return;const r=$('cHyd').getBoundingClientRect(),x=e.clientX-r.left;
   const i=Math.round(hydGeom.x0+(x-hydGeom.L)/hydGeom.pw*(hydGeom.x1-hydGeom.x0));
@@ -941,9 +992,8 @@ function hoverAt(e){
   if(e.type==='pointerdown'){setMapDay(i);}
   setHover(i);
 }
-$('cHyd').addEventListener('pointermove',hoverAt);
-$('cHyd').addEventListener('pointerdown',hoverAt);
-$('cHyd').addEventListener('pointerleave',clearHover);
+attachZoom($('cHyd'),()=>hydGeom,setHover,clearHover);
+for(const id of ['cSwe','cSat'])attachZoom($(id),()=>stateGeom[id],setHover,clearHover);
 
 /* ---------- auto-calibrate (DDS) ---------- */
 function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
@@ -978,7 +1028,9 @@ function buildControls(){
   const seg=$('segRange');
   [['all','All'],['2009','2009'],['2010','2010'],['2011','2011'],['2012','2012'],['2013','2013']].forEach(([v,l])=>{
     const b=document.createElement('button');b.type='button';b.dataset.v=v;b.textContent=l;b.setAttribute('aria-pressed',v==='all');
-    b.addEventListener('click',()=>{S.range=v;seg.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawHyd();drawStrips();});seg.append(b);});
+    b.addEventListener('click',()=>{if(v==='all')setView(0,N);else{const y=+v-2009;setView(y*365,(y+1)*365);}});seg.append(b);});
+  $('btnFull').addEventListener('click',()=>setView(0,N));$('btnOut').addEventListener('click',zoomOut);
+  addEventListener('keydown',e=>{if(e.key==='Escape'&&S.drag){S.drag=null;drawTimeCharts();}});
   $('segScale').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{S.scale=b.dataset.v;$('segScale').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawHyd();}));
   const sel=$('evalSel');[['all','2010–2013 (after spin-up)'],['2010','2010'],['2011','2011'],['2012','2012'],['2013','2013'],['2009','2009 (spin-up)']].forEach(([v,l])=>{const o=document.createElement('option');o.value=v;o.textContent=l;sel.append(o);});
   sel.addEventListener('change',()=>{S.evalSel=sel.value;renderMetrics();renderTables();drawMonthly();drawFdc();drawStrips();});
@@ -1001,10 +1053,9 @@ const VARS=[
  {k:'hum',g:0,t:'Humidity',u:'kPa',s:[{n:'Vapour pressure',c:'tn',f:F=>F.ea},{n:'VPD',c:'tx',f:F=>vpdOf(F)}]},
  {k:'lai',g:1,raw:1,t:'Leaf area index',u:'m²/m²',s:[{n:'LAI',c:'lai',f:(F,o)=>o.LAI,area:1}]},
  {k:'alb',g:1,t:'Albedo and snow cover',u:'fraction',s:[{n:'Albedo',c:'rad',f:(F,o)=>o.albedo},{n:'Snow-covered',c:'sim',f:(F,o)=>o.snowCover,area:1}]},
- {k:'pet',g:1,t:'Potential and actual ET',u:'mm/d',flux:1,s:[{n:'PET',c:'pet',f:(F,o)=>o.PET},{n:'ET',c:'et',f:(F,o)=>o.ET}]},
- {k:'etp',g:2,t:'ET components',u:'mm/d',flux:1,stack:1,s:[{n:'Root zone',c:'et',f:(F,o)=>o.Ea},{n:'Interception',c:'lai',f:(F,o)=>o.Ei},{n:'Canopy snow',c:'tn',f:(F,o)=>o.Es},{n:'Impervious',c:'bad',f:(F,o)=>o.Eimp}]},
- {k:'snowp',g:2,t:'Rain, snowfall and melt',u:'mm/d',flux:1,s:[{n:'Rain',c:'pcp',f:(F,o)=>o.rain},{n:'Snowfall',c:'tn',f:(F,o)=>o.snow},{n:'Melt',c:'warn',f:(F,o)=>o.melt}]},
- {k:'qp',g:2,t:'Runoff components',u:'mm/d',flux:1,stack:1,s:[{n:'Baseflow',c:'sim',f:(F,o)=>o.Qb},{n:'Saturation excess',c:'et',f:(F,o)=>o.Qof},{n:'Stormflow',c:'pcp',f:(F,o)=>o.Qssf},{n:'Infiltration excess',c:'warn',f:(F,o)=>o.Qie},{n:'Impervious',c:'bad',f:(F,o)=>o.Qimp}]},
+ {k:'pet',g:1,t:'ET components and PET',u:'mm/d',flux:1,stack:4,tot:'ET',s:[{n:'Root zone',c:'et',f:(F,o)=>o.Ea},{n:'Interception',c:'lai',f:(F,o)=>o.Ei},{n:'Canopy snow',c:'tn',f:(F,o)=>o.Es},{n:'Impervious',c:'bad',f:(F,o)=>o.Eimp},{n:'PET',c:'pet',f:(F,o)=>o.PET}]},
+  {k:'snowp',g:2,t:'Rain, snowfall and melt',u:'mm/d',flux:1,s:[{n:'Rain',c:'pcp',f:(F,o)=>o.rain},{n:'Snowfall',c:'tn',f:(F,o)=>o.snow},{n:'Melt',c:'warn',f:(F,o)=>o.melt}]},
+ {k:'qp',g:2,t:'Runoff components',u:'mm/d',flux:1,stack:5,tot:'Q sim',s:[{n:'Baseflow',c:'sim',f:(F,o)=>o.Qb},{n:'Saturation excess',c:'et',f:(F,o)=>o.Qof},{n:'Stormflow',c:'pcp',f:(F,o)=>o.Qssf},{n:'Infiltration excess',c:'warn',f:(F,o)=>o.Qie},{n:'Impervious',c:'bad',f:(F,o)=>o.Qimp}]},
  {k:'rech',g:2,t:'Drainage and recharge',u:'mm/d',flux:1,s:[{n:'Unsaturated drainage',c:'stor',f:(F,o)=>o.Quz},{n:'Stormflow-zone leakage',c:'tn',f:(F,o)=>o.qv}]},
  {k:'swe',g:3,t:'Snowpack and canopy water',u:'mm',s:[{n:'SWE',c:'sim',f:(F,o)=>o.SWE,area:1},{n:'Canopy snow',c:'tn',f:(F,o)=>o.Csnow},{n:'Canopy rain',c:'lai',f:(F,o)=>o.Ccan}]},
  {k:'def',g:3,t:'Soil water deficits',u:'mm',s:[{n:'Mean deficit S̄',c:'stor',f:(F,o)=>o.Sbar},{n:'Root-zone deficit',c:'warn',f:(F,o)=>o.SRZ},{n:'Unsaturated storage',c:'sim',f:(F,o)=>o.SUZ}]},
@@ -1037,8 +1088,9 @@ function buildStrips(){
   for(const k of S.vars){const v=VM[k],d=document.createElement('div');d.className='strip';
     d.innerHTML=`<div class="sh"><b>${v.t}<small>${v.u}</small></b><span class="sv"></span></div><canvas class="chart" style="height:${v.stack?130:112}px" aria-label="${v.t}"></canvas>`;
     root.append(d);const cv=d.querySelector('canvas');strips[k]={cv,sv:d.querySelector('.sv'),geom:null};
-    cv.addEventListener('pointermove',e=>stripHover(k,e));cv.addEventListener('pointerdown',e=>stripHover(k,e));
-    cv.addEventListener('pointerleave',()=>{if(S.varMode==='cyc'){S.cycHover=-1;drawStrips();}else clearHover();});}
+    attachZoom(cv,()=>S.varMode==='ts'&&strips[k]?strips[k].geom:null,setHover,clearHover);
+    cv.addEventListener('pointermove',e=>{if(S.varMode==='cyc')stripHover(k,e);});
+    cv.addEventListener('pointerleave',()=>{if(S.varMode==='cyc'){S.cycHover=-1;drawStrips();}});}
 }
 function seriesData(v){const F=S.site.F,o=S.out;return v.s.map(sr=>{let a=sr.f(F,o);if(sr.sc)a=Float64Array.from(a,x=>x*sr.sc);return a;});}
 function cycleOf(a,smooth){
@@ -1058,7 +1110,8 @@ function drawStrip(k){
   if(cyc){const cs=raw.map(a=>cycleOf(a,v.raw?1:7));ys=cs.map(z=>z.m);if(v.s.length===1&&cs[0].ny>1)band=cs[0];x0=0;x1=365;}
   else{[x0,x1]=rangeBounds();ys=raw;}
   // stacked cumulative
-  let draws=ys;if(v.stack){draws=[];let acc=new Float64Array(ys[0].length);for(const a of ys){acc=Float64Array.from(acc,(x,i)=>x+(Number.isFinite(a[i])?a[i]:0));draws.push(acc);}}
+  const ns=v.stack||0;let draws=ys,tot=null;
+  if(ns){draws=[];let acc=new Float64Array(ys[0].length);ys.forEach((a,j)=>{if(j<ns){acc=Float64Array.from(acc,(x,i)=>x+(Number.isFinite(a[i])?a[i]:0));draws.push(acc);}else draws.push(a);});tot=draws[ns-1];}
   let mx=-Infinity,mn=Infinity;
   for(const a of (band?[band.lo,band.hi]:[]).concat(draws))for(let i=x0;i<x1;i++){const y=a[i];if(Number.isFinite(y)){if(y>mx)mx=y;if(y<mn)mn=y;}}
   const ref=v.ref?v.ref(S.params[S.site.id]):null;if(ref){mx=Math.max(mx,ref.v);mn=Math.min(mn,ref.v);}
@@ -1072,32 +1125,34 @@ function drawStrip(k){
   // x axis
   c.fillStyle=col('muted');c.textAlign='center';c.textBaseline='top';c.strokeStyle=col('line');
   if(cyc){for(let m=0;m<12;m++){const x=X(CUM[m]);c.beginPath();c.moveTo(x+.5,yB);c.lineTo(x+.5,yB+3);c.stroke();c.fillText(MN[m][0],(X(CUM[m])+X(CUM[m+1]))/2,yB+3);}}
-  else if(x1-x0<=400){for(let i=Math.ceil(x0);i<x1;i++){const d=i%365;if(CUM.includes(d)&&d<365){const x=X(i);c.fillText(MN[monthOf(i)],Math.min(Math.max(x+8,L+10),w-R-10),yB+3);c.beginPath();c.moveTo(x+.5,yB);c.lineTo(x+.5,yB+3);c.stroke();}}}
-  else{if(x0<SPIN){c.fillStyle=col('shade');c.fillRect(L,T,X(Math.min(SPIN,x1))-L,yB-T);c.fillStyle=col('muted');}
-    for(let y=0;y<5;y++){const i=y*365;if(i>=x0&&i<x1){const x=X(i);c.beginPath();c.moveTo(x+.5,yT);c.lineTo(x+.5,yB+3);c.stroke();c.fillText(2009+y,Math.min(x+16,w-R-14),yB+3);}}}
+  else{if(x0<SPIN){c.fillStyle=col('shade');c.fillRect(L,T,X(Math.min(SPIN,x1))-L,yB-T);}xAxis(c,col,X,x0,x1,L,R,w,yT,yB);}
   c.save();c.beginPath();c.rect(L,T,pw,yB-T);c.clip();
   if(band){c.fillStyle=col(v.s[0].c);c.globalAlpha=.14;c.beginPath();for(let i=0;i<365;i++)c.lineTo(X(i),Y(band.hi[i]));for(let i=364;i>=0;i--)c.lineTo(X(i),Y(band.lo[i]));c.closePath();c.fill();c.globalAlpha=1;}
   if(ref){c.strokeStyle=col('muted');c.setLineDash([2,3]);const y=Math.round(Y(ref.v))+.5;c.beginPath();c.moveTo(L,y);c.lineTo(w-R,y);c.stroke();c.setLineDash([]);
     c.fillStyle=col('muted');c.textAlign='right';c.textBaseline='bottom';c.lineWidth=3;c.strokeStyle=col('panel');c.strokeText(ref.l,w-R-4,y-2);c.fillText(ref.l,w-R-4,y-2);}
+  const po=!cyc&&x1-x0<120?.5:0,XP=i=>X(i+po);
   const area=(a,base,cn,al)=>{c.fillStyle=col(cn);c.globalAlpha=al;c.beginPath();let first=true;
-    for(let i=x0;i<x1;i++){const y=Number.isFinite(a[i])?a[i]:0;first?(c.moveTo(X(i),Y(y)),first=false):c.lineTo(X(i),Y(y));}
-    for(let i=x1-1;i>=x0;i--)c.lineTo(X(i),Y(base?base[i]:0));c.closePath();c.fill();c.globalAlpha=1;};
+    for(let i=x0;i<x1;i++){const y=Number.isFinite(a[i])?a[i]:0;first?(c.moveTo(XP(i),Y(y)),first=false):c.lineTo(XP(i),Y(y));}
+    for(let i=x1-1;i>=x0;i--)c.lineTo(XP(i),Y(base?base[i]:0));c.closePath();c.fill();c.globalAlpha=1;};
   const line=(a,cn,lw,dash)=>{c.strokeStyle=col(cn);c.lineWidth=lw;c.setLineDash(dash||[]);c.lineJoin='round';c.beginPath();let pen=false;
-    for(let i=x0;i<x1;i++){const y=a[i];if(!Number.isFinite(y)){pen=false;continue;}pen?c.lineTo(X(i),Y(y)):(c.moveTo(X(i),Y(y)),pen=true);}c.stroke();c.setLineDash([]);};
+    for(let i=x0;i<x1;i++){const y=a[i];if(!Number.isFinite(y)){pen=false;continue;}pen?c.lineTo(XP(i),Y(y)):(c.moveTo(XP(i),Y(y)),pen=true);}c.stroke();c.setLineDash([]);};
   draws.forEach((a,j)=>{const sr=v.s[j];
-    if(v.stack){area(a,j?draws[j-1]:null,sr.c,.75);}
-    else if(sr.bar&&!cyc){c.fillStyle=col(sr.c);const bw=Math.max(1,pw/(x1-x0));for(let i=x0;i<x1;i++){const q=a[i];if(q>0)c.fillRect(X(i),Y(q),bw,Y(0)-Y(q));}}
+    if(j<ns){area(a,j?draws[j-1]:null,sr.c,.75);}
+    else if(sr.bar&&!cyc){c.fillStyle=col(sr.c);const bw=Math.max(1,pw/(x1-x0)*(x1-x0<200?0.8:1));const bo=x1-x0<200?pw/(x1-x0)*0.1:0;for(let i=x0;i<x1;i++){const q=a[i];if(q>0)c.fillRect(X(i)+bo,Y(q),bw,Y(0)-Y(q));}}
     else{if(sr.area||sr.bar)area(a,null,sr.c,.22);line(a,sr.c,1.4,sr.dash);}});
   c.restore();
   const hv=cyc?S.cycHover:(S.mapDay>=0?S.mapDay:S.hoverIdx);
-  if(hv>=x0&&hv<x1){c.strokeStyle=col('muted');c.lineWidth=1;const x=Math.round(X(hv))+.5;c.beginPath();c.moveTo(x,T);c.lineTo(x,yB);c.stroke();}
+  if(hv>=x0&&hv<x1){c.strokeStyle=col('muted');c.lineWidth=1;const x=Math.round(XP(hv))+.5;c.beginPath();c.moveTo(x,T);c.lineTo(x,yB);c.stroke();}
+  if(!cyc)drawSel(c,col,st.cv,X,T,yB,x0,x1);
   st.geom={L,pw,x0,x1};
   // readout
   const sw=sr=>`<i style="background:var(--${sr.c})"></i>`;
   let txt;
-  if(hv>=x0&&hv<x1){txt=(cyc?MD(hv):dateOf(hv))+' · '+v.s.map((sr,j)=>`${sw(sr)}${sr.n} ${fmt(ys[j][hv],digits(ys[j][hv]))}`).join(' · ');}
+  const totTxt=(val,yr)=>tot?` · <b style="font-weight:600;color:var(--fg)">${v.tot} ${fmt(val,digits(val))}</b>${yr?` (${Math.round(val*365)} mm/yr)`:''}`:'';
+  if(hv>=x0&&hv<x1){txt=(cyc?MD(hv):dateOf(hv))+totTxt(tot?tot[hv]:0)+' · '+v.s.map((sr,j)=>`${sw(sr)}${sr.n} ${fmt(ys[j][hv],digits(ys[j][hv]))}`).join(' · ');}
   else{const means=ys.map(a=>{let s=0,n=0;for(let i=x0;i<x1;i++)if(Number.isFinite(a[i])){s+=a[i];n++;}return n?s/n:NaN;});
-    txt=(cyc?'mean of daily cycle':'period mean')+' · '+v.s.map((sr,j)=>`${sw(sr)}${sr.n} ${fmt(means[j],digits(means[j]))}${v.flux?` <span title="annual total">(${Math.round(means[j]*365)} mm/yr)</span>`:''}`).join(' · ');}
+    let tm=NaN;if(tot){let s2=0,n2=0;for(let i=x0;i<x1;i++){s2+=tot[i];n2++;}tm=s2/n2;}
+    txt=(cyc?'mean of daily cycle':'period mean')+totTxt(tm,v.flux)+' · '+v.s.map((sr,j)=>`${sw(sr)}${sr.n} ${fmt(means[j],digits(means[j]))}${v.flux?` <span title="annual total">(${Math.round(means[j]*365)} mm/yr)</span>`:''}`).join(' · ');}
   st.sv.innerHTML=txt;
 }
 const digits=x=>!Number.isFinite(x)?1:Math.abs(x)>=100?0:Math.abs(x)>=10?1:2;
@@ -1106,7 +1161,7 @@ function drawStrips(){
   const r=evalRange(),ny=(r[1]-r[0])/365;
   $('varNote').textContent=S.varMode==='cyc'
     ?`Day-of-year means over the evaluation window (${ny>1?ny+' years':'one year'}${ny>1?'; shaded band = range across years on single-variable strips':''}). Curves other than LAI are smoothed with a 7-day running mean. Change the window under Fit statistics.`
-    :'Same period as the discharge plot. Hover a strip to read daily values and move the hydrograph and map day; values beside each title are period means (and annual totals for fluxes) when nothing is hovered. Stacked strips add up to the total.';
+    :'Same period as the discharge plot. Hover a strip to read daily values and move the hydrograph and map day; values beside each title are period means (and annual totals for fluxes) when nothing is hovered. Stacked areas add up to the bold total; PET is drawn as a line over the ET components. Drag across any time-series chart to zoom.';
 }
 function stripHover(k,e){
   const g=strips[k]&&strips[k].geom;if(!g)return;const r=strips[k].cv.getBoundingClientRect();
