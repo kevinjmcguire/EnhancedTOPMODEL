@@ -232,8 +232,8 @@ a{color:var(--sim)}
       </div>
 
       <div class="grid2">
-        <div class="panel"><h2>Mean monthly water balance (mm)</h2><canvas class="chart" id="cMon" style="height:230px" aria-label="Monthly precipitation, ET and discharge"></canvas>
-          <div class="legend"><span><i class="b" style="background:var(--pcp)"></i>Precipitation</span><span><i style="background:var(--et)"></i>ET</span><span><i style="background:var(--obs)"></i>Q observed</span><span><i style="background:var(--sim)"></i>Q simulated</span></div></div>
+        <div class="panel"><h2>Mean monthly water balance (mm)</h2><canvas class="chart" id="cMon" style="height:230px" aria-label="Monthly precipitation, ET components and discharge"></canvas>
+          <div class="legend"><span><i class="b" style="background:var(--pcp)"></i>Precipitation</span><span><i class="b" style="background:var(--et)"></i>Transpiration</span><span><i class="b" style="background:var(--rad)"></i>Interception loss, rain</span><span><i class="b" style="background:var(--tn)"></i>Interception loss, snow</span><span><i style="background:var(--obs)"></i>Q observed</span><span><i style="background:var(--sim)"></i>Q simulated</span></div></div>
         <div class="panel"><h2>Flow duration curve</h2><canvas class="chart" id="cFdc" style="height:230px" aria-label="Flow duration curve"></canvas>
           <div class="legend"><span><i style="background:var(--obs)"></i>Observed</span><span><i style="background:var(--sim)"></i>Simulated</span></div></div>
       </div>
@@ -726,9 +726,9 @@ function renderTables(){
   const tot=sumRange(o.Qtot,r[0],r[1])||1;let bar='',leg='';
   for(const [l,k,c] of comp){const f=sumRange(o[k],r[0],r[1])/tot;bar+=`<div style="width:${(100*f).toFixed(2)}%;background:${c}"></div>`;leg+=`<span><i class="b" style="background:${c}"></i>${l} ${(100*f).toFixed(f<0.01&&f>0?1:0)}%</span>`;}
   $('comp').innerHTML=bar;$('compLeg').innerHTML=leg;
-  const ce=[['Root zone (transpiration and soil)','Ea','var(--et)'],['Interception','Ei','var(--lai)'],['Canopy snow sublimation','Es','var(--tn)'],['Impervious','Eimp','var(--bad)']];
+  const ce=[['Transpiration','Ea','var(--et)'],['Interception loss, rain','Ei','var(--rad)'],['Interception loss, snow','Es','var(--tn)'],['Impervious surfaces','Eimp','var(--bad)']];
   const te=sumRange(o.ET,r[0],r[1])||1;bar='';leg='';
-  for(const [l,k,c] of ce){const f=sumRange(o[k],r[0],r[1])/te;if(f<=0&&k!=='Ea')continue;bar+=`<div style="width:${(100*f).toFixed(2)}%;background:${c}"></div>`;leg+=`<span><i class="b" style="background:${c}"></i>${l} ${(100*f).toFixed(f<0.01&&f>0?1:0)}%</span>`;}
+  for(const [l,k,c] of ce){const f=sumRange(o[k],r[0],r[1])/te;if(f<=0&&k==='Eimp')continue;bar+=`<div style="width:${(100*f).toFixed(2)}%;background:${c}"></div>`;leg+=`<span><i class="b" style="background:${c}"></i>${l} ${(100*f).toFixed(f<0.01&&f>0?1:0)}%</span>`;}
   const ny=(r[1]-r[0])/365;leg+=`<span>ET ${Math.round(te/ny)} mm/yr of PET ${Math.round(sumRange(o.PET,r[0],r[1])/ny)} mm/yr</span>`;
   $('compEt').innerHTML=bar;$('compEtLeg').innerHTML=leg;
 }
@@ -824,13 +824,14 @@ function drawHyd(){
 function drawMonthly(){
   const col=css(),{c,w,h}=setup($('cMon')),L=36,R=6,T=6,B=18,r=evalRange(),F=S.site.F,Q=S.site.Q,o=S.out;
   const ny=(r[1]-r[0])/365,mo=k=>{const z=new Float64Array(12);for(let i=r[0];i<r[1];i++)z[monthOf(i)]+=k[i]/ny;return z;};
-  const P=mo(F.P),qo=mo(Q),qs=mo(o.Qsim),et=mo(o.ET);
+  const P=mo(F.P),qo=mo(Q),qs=mo(o.Qsim),et=mo(o.ET),eT=mo(o.Ea),eR=mo(o.Ei),eS=mo(o.Es);
   const mx=Math.max(...P,...qo,...qs,...et)*1.08||1,ytk=ticks(0,mx,4),Y=v=>h-B-v/mx*(h-B-T),pw=w-L-R,X=m=>L+(m+.5)/12*pw;
   c.strokeStyle=col('line');c.fillStyle=col('muted');c.textAlign='right';c.textBaseline='middle';
   for(const v of ytk){const y=Math.round(Y(v))+.5;c.beginPath();c.moveTo(L,y);c.lineTo(w-R,y);c.stroke();c.fillText(fnum(v),L-5,y);}
-  c.fillStyle=col('pcp');for(let m=0;m<12;m++){const bw=pw/12*0.62;c.fillRect(X(m)-bw/2,Y(P[m]),bw,h-B-Y(P[m]));}
+  const bw=pw/12*0.36;c.fillStyle=col('pcp');for(let m=0;m<12;m++)c.fillRect(X(m)-bw,Y(P[m]),bw-1,h-B-Y(P[m]));
+  for(let m=0;m<12;m++){let base=0;for(const [z,cn] of [[eT,'et'],[eR,'rad'],[eS,'tn']]){if(z[m]<=0)continue;c.fillStyle=col(cn);c.fillRect(X(m),Y(base+z[m]),bw-1,Y(base)-Y(base+z[m]));base+=z[m];}}
   const line=(z,cn,dash)=>{c.strokeStyle=col(cn);c.lineWidth=1.8;c.setLineDash(dash||[]);c.beginPath();z.forEach((v,m)=>m?c.lineTo(X(m),Y(v)):c.moveTo(X(m),Y(v)));c.stroke();c.setLineDash([]);};
-  line(et,'et',[4,3]);line(qo,'obs');line(qs,'sim');
+  line(qo,'obs');line(qs,'sim');
   c.fillStyle=col('muted');c.textAlign='center';c.textBaseline='top';for(let m=0;m<12;m++)c.fillText(MN[m][0],X(m),h-B+3);
 }
 function drawFdc(){
@@ -1053,7 +1054,7 @@ const VARS=[
  {k:'hum',g:0,t:'Humidity',u:'kPa',s:[{n:'Vapour pressure',c:'tn',f:F=>F.ea},{n:'VPD',c:'tx',f:F=>vpdOf(F)}]},
  {k:'lai',g:1,raw:1,t:'Leaf area index',u:'m²/m²',s:[{n:'LAI',c:'lai',f:(F,o)=>o.LAI,area:1}]},
  {k:'alb',g:1,t:'Albedo and snow cover',u:'fraction',s:[{n:'Albedo',c:'rad',f:(F,o)=>o.albedo},{n:'Snow-covered',c:'sim',f:(F,o)=>o.snowCover,area:1}]},
- {k:'pet',g:1,t:'ET components and PET',u:'mm/d',flux:1,stack:4,tot:'ET',s:[{n:'Root zone',c:'et',f:(F,o)=>o.Ea},{n:'Interception',c:'lai',f:(F,o)=>o.Ei},{n:'Canopy snow',c:'tn',f:(F,o)=>o.Es},{n:'Impervious',c:'bad',f:(F,o)=>o.Eimp},{n:'PET',c:'pet',f:(F,o)=>o.PET}]},
+ {k:'pet',g:1,t:'ET components and PET',u:'mm/d',flux:1,stack:3,tot:'ET',s:[{n:'Transpiration',c:'et',f:(F,o)=>o.Ea},{n:'Interception loss, rain',c:'rad',f:(F,o)=>o.Ei},{n:'Interception loss, snow',c:'tn',f:(F,o)=>o.Es},{n:'PET',c:'pet',f:(F,o)=>o.PET,lw:1.8}]},
   {k:'snowp',g:2,t:'Rain, snowfall and melt',u:'mm/d',flux:1,s:[{n:'Rain',c:'pcp',f:(F,o)=>o.rain},{n:'Snowfall',c:'tn',f:(F,o)=>o.snow},{n:'Melt',c:'warn',f:(F,o)=>o.melt}]},
  {k:'qp',g:2,t:'Runoff components',u:'mm/d',flux:1,stack:5,tot:'Q sim',s:[{n:'Baseflow',c:'sim',f:(F,o)=>o.Qb},{n:'Saturation excess',c:'et',f:(F,o)=>o.Qof},{n:'Stormflow',c:'pcp',f:(F,o)=>o.Qssf},{n:'Infiltration excess',c:'warn',f:(F,o)=>o.Qie},{n:'Impervious',c:'bad',f:(F,o)=>o.Qimp}]},
  {k:'rech',g:2,t:'Drainage and recharge',u:'mm/d',flux:1,s:[{n:'Unsaturated drainage',c:'stor',f:(F,o)=>o.Quz},{n:'Stormflow-zone leakage',c:'tn',f:(F,o)=>o.qv}]},
@@ -1065,7 +1066,7 @@ const VARS=[
 ];
 const VM=Object.fromEntries(VARS.map(v=>[v.k,v]));
 S.vars=['lai','pet','temp','qp'];S.varMode='ts';S.cycHover=-1;
-try{const v=JSON.parse(localStorage.getItem('tm_vars')||'null');if(Array.isArray(v))S.vars=v.filter(k=>VM[k]);}catch(e){}
+try{const v=JSON.parse(localStorage.getItem('tm_vars2')||'null');if(Array.isArray(v))S.vars=v.filter(k=>VM[k]);}catch(e){}
 const strips={};
 
 function buildVarUI(){
@@ -1074,7 +1075,7 @@ function buildVarUI(){
     for(const v of VARS.filter(x=>x.g===gi)){const b=document.createElement('button');b.type='button';b.className='chip';b.textContent=v.t;b.dataset.k=v.k;
       b.setAttribute('aria-pressed',S.vars.includes(v.k));
       b.addEventListener('click',()=>{const on=S.vars.includes(v.k);S.vars=on?S.vars.filter(k=>k!==v.k):VARS.map(x=>x.k).filter(k=>k===v.k||S.vars.includes(k));
-        b.setAttribute('aria-pressed',!on);try{localStorage.setItem('tm_vars',JSON.stringify(S.vars));}catch(e){}buildStrips();drawStrips();});
+        b.setAttribute('aria-pressed',!on);try{localStorage.setItem('tm_vars2',JSON.stringify(S.vars));}catch(e){}buildStrips();drawStrips();});
       box.append(b);}
     root.append(box);});
   $('segVarMode').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{S.varMode=b.dataset.v;S.cycHover=-1;
@@ -1137,9 +1138,9 @@ function drawStrip(k){
   const line=(a,cn,lw,dash)=>{c.strokeStyle=col(cn);c.lineWidth=lw;c.setLineDash(dash||[]);c.lineJoin='round';c.beginPath();let pen=false;
     for(let i=x0;i<x1;i++){const y=a[i];if(!Number.isFinite(y)){pen=false;continue;}pen?c.lineTo(XP(i),Y(y)):(c.moveTo(XP(i),Y(y)),pen=true);}c.stroke();c.setLineDash([]);};
   draws.forEach((a,j)=>{const sr=v.s[j];
-    if(j<ns){area(a,j?draws[j-1]:null,sr.c,.75);}
+    if(j<ns){area(a,j?draws[j-1]:null,sr.c,.85);}
     else if(sr.bar&&!cyc){c.fillStyle=col(sr.c);const bw=Math.max(1,pw/(x1-x0)*(x1-x0<200?0.8:1));const bo=x1-x0<200?pw/(x1-x0)*0.1:0;for(let i=x0;i<x1;i++){const q=a[i];if(q>0)c.fillRect(X(i)+bo,Y(q),bw,Y(0)-Y(q));}}
-    else{if(sr.area||sr.bar)area(a,null,sr.c,.22);line(a,sr.c,1.4,sr.dash);}});
+    else{if(sr.area||sr.bar)area(a,null,sr.c,.22);line(a,sr.c,sr.lw||1.4,sr.dash);}});
   c.restore();
   const hv=cyc?S.cycHover:(S.mapDay>=0?S.mapDay:S.hoverIdx);
   if(hv>=x0&&hv<x1){c.strokeStyle=col('muted');c.lineWidth=1;const x=Math.round(XP(hv))+.5;c.beginPath();c.moveTo(x,T);c.lineTo(x,yB);c.stroke();}
