@@ -1,0 +1,1269 @@
+<title>TOPMODEL Watershed Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<style>
+/* Layout: workflow tabs across the top (as in the Shiny app); each page is a control column beside a results column that stacks on phones. */
+:root {
+  --bg: #f4f6f5;          /* page: pale slate with a slight green bias, like map paper */
+  --panel: #ffffff;
+  --sunk: #e9eeec;
+  --line: #d3dbd8;
+  --ink: #15232b;
+  --ink-2: #4a5a60;
+  --ink-3: #75858a;
+  --accent: #1d5f9e;      /* stream blue */
+  --accent-ink: #ffffff;
+  --accent-soft: #dce9f5;
+  --va: #b5562a;          /* Virginia highlight on the map */
+  --land: #e2e8e5;
+  --good: #1e7a46; --fair: #a26a00; --poor: #b23a3a;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --obs: #15232b;
+  --sat: #1f6fd1; --terr-lo: #eef1ee; --terr-hi: #7f8e86; --hs-lo: #8e9893; --hs-hi: #eef1ec;
+  --f-display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #101719; --panel: #172124; --sunk: #1d292d; --line: #2c3a3f; --ink: #e6ecea; --ink-2: #a9b7b8; --ink-3: #7d8d90;
+  --accent: #5ba2e6; --accent-ink: #0c1418; --accent-soft: #1d3346; --va: #e08355; --land: #22302f;
+  --good: #4cbb7a; --fair: #d9a33a; --poor: #e47070;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #2f9a2f; --s7: #9085e9; --s8: #e66767; --obs: #e6ecea; --sat: #4f9cf0; --terr-lo: #2a3533; --terr-hi: #8fa39a; --hs-lo: #1f2827; --hs-hi: #7b8882;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #101719; --panel: #172124; --sunk: #1d292d; --line: #2c3a3f; --ink: #e6ecea; --ink-2: #a9b7b8; --ink-3: #7d8d90;
+  --accent: #5ba2e6; --accent-ink: #0c1418; --accent-soft: #1d3346; --va: #e08355; --land: #22302f;
+  --good: #4cbb7a; --fair: #d9a33a; --poor: #e47070;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #2f9a2f; --s7: #9085e9; --s8: #e66767; --obs: #e6ecea; --sat: #4f9cf0; --terr-lo: #2a3533; --terr-hi: #8fa39a; --hs-lo: #1f2827; --hs-hi: #7b8882;
+  color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num, td.n, .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding-block: 10px 4px; }
+.brand h1 { font-family: var(--f-display); font-weight: 600; font-size: 1.45rem; letter-spacing: -0.01em; }
+.brand .site { color: var(--ink-2); font-size: 0.92rem; min-width: 0; }
+.brand .site b { color: var(--ink); font-weight: 600; }
+nav.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+nav.tabs button { border: 0; background: none; padding: 9px 12px 10px; cursor: pointer; color: var(--ink-2); white-space: nowrap; border-bottom: 2px solid transparent; }
+nav.tabs button .k { font-family: var(--f-mono); font-size: 0.75rem; color: var(--ink-3); margin-right: 5px; }
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+nav.tabs button:hover { color: var(--ink); }
+
+main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; max-width: 1500px; margin: 0 auto; }
+.page[hidden] { display: none !important; }
+.split { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.side { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+@media (min-width: 901px) { .side.stick { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 92px); max-height: calc(100vh - 110px); overflow-y: auto; } }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; min-width: 0; }
+.card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; }
+.eyebrow { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+.note { color: var(--ink-2); font-size: 0.86rem; }
+.note.small { font-size: 0.8rem; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row > * { min-width: 0; }
+
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: var(--r); padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.small { padding: 3px 9px; font-size: 0.84rem; }
+label.sw { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+label.sw input { accent-color: var(--accent); width: 16px; height: 16px; }
+.field { display: flex; flex-direction: column; gap: 3px; }
+.field > span { font-size: 0.82rem; color: var(--ink-2); }
+input[type="number"], input[type="date"], select { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; min-width: 0; }
+input[type="number"] { width: 100%; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* parameter controls */
+details.grp { border-top: 1px solid var(--line); padding-top: 6px; }
+details.grp > summary { cursor: pointer; font-weight: 600; padding: 4px 0; list-style: none; display: flex; justify-content: space-between; }
+details.grp > summary::after { content: "+"; color: var(--ink-3); font-family: var(--f-mono); }
+details.grp[open] > summary::after { content: "−"; }
+.prm { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 2px 8px; align-items: center; padding: 4px 0; }
+.prm .lab { font-size: 0.84rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.prm .lab small { color: var(--ink-3); font-family: var(--f-mono); font-size: 0.74rem; }
+.prm input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 0; }
+.prm input[type="number"] { font-family: var(--f-mono); font-size: 0.82rem; padding: 2px 4px; text-align: right; }
+.prm.off { opacity: 0.45; }
+
+/* KPI strip */
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 700px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.kpi .t { font-size: 0.74rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.kpi .v { font-family: var(--f-mono); font-size: 1.35rem; font-weight: 500; }
+.kpi .s { font-size: 0.78rem; color: var(--ink-2); }
+.pill { font-size: 0.68rem; padding: 0 6px; border-radius: 99px; border: 1px solid currentColor; letter-spacing: 0.04em; }
+.pill.good { color: var(--good); } .pill.fair { color: var(--fair); } .pill.poor { color: var(--poor); }
+
+/* sub tabs */
+.subtabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.subtabs button { border: 0; background: none; padding: 6px 10px; cursor: pointer; color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.subtabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.plot { width: 100%; min-height: 260px; }
+.tblwrap { overflow-x: auto; }
+table.t { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+table.t th, table.t td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+table.t th:first-child, table.t td:first-child { text-align: left; }
+table.t th { color: var(--ink-2); font-weight: 600; background: var(--sunk); position: sticky; top: 0; }
+table.t td { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+table.t td.txt { font-family: var(--f-body); }
+
+/* watershed page */
+.mapwrap { position: relative; }
+svg.us { width: 100%; max-width: 1000px; height: auto; display: block; margin: 0 auto; }
+svg.us .st { fill: var(--land); stroke: var(--panel); stroke-width: 0.8; }
+svg.us .st.va { fill: color-mix(in srgb, var(--va) 22%, var(--land)); }
+svg.us .pt { cursor: pointer; }
+svg.us .pt circle { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+svg.us .pt.va circle { fill: var(--va); }
+svg.us .pt.sel circle { stroke: var(--ink); stroke-width: 2.5; }
+svg.us .pt text { font-family: var(--f-body); font-size: 11px; fill: var(--ink-2); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+svg.us .inset-frame { fill: var(--panel); stroke: var(--line); }
+svg.us .lead { stroke: var(--ink-3); stroke-dasharray: 2 3; fill: none; }
+.wsgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.ws { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ws:hover { border-color: var(--ink-3); }
+.ws[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ws .nm { font-family: var(--f-display); font-size: 1.12rem; font-weight: 600; line-height: 1.2; }
+.ws .loc { font-size: 0.8rem; color: var(--ink-2); }
+.ws .loc .gid { font-family: var(--f-mono); color: var(--ink-3); }
+.ws .clim { font-size: 0.8rem; color: var(--ink); }
+.ws dl { display: grid; grid-template-columns: repeat(4, auto); justify-content: start; gap: 0 14px; margin: 4px 0 0; }
+.ws dt { font-size: 0.68rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.ws dd { margin: 0; font-family: var(--f-mono); font-size: 0.82rem; grid-row: 2; }
+.secthead { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 2px; }
+.secthead h2 { font-family: var(--f-display); font-size: 1.2rem; font-weight: 600; }
+.lede { max-width: 70ch; color: var(--ink-2); }
+
+.satgrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 760px) { .satgrid { grid-template-columns: minmax(0, 1fr); } }
+figure.satmap { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#satCanvas { width: 100%; height: auto; max-height: 520px; object-fit: contain; display: block; }
+.key { display: inline-flex; gap: 5px; align-items: center; font-size: 0.8rem; color: var(--ink-2); }
+.key i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.key i.ramp { width: 40px; background: linear-gradient(90deg, var(--hs-lo), var(--hs-hi)); }
+.scale { display: inline-flex; gap: 6px; align-items: center; font-size: 0.78rem; color: var(--ink-2); }
+.scale i { height: 4px; background: var(--ink-2); display: inline-block; }
+.satday { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.satday .d { font-size: 1.05rem; color: var(--ink); }
+.satday .pct { font-size: 1.8rem; color: var(--sat); font-weight: 500; }
+.progress { height: 6px; background: var(--sunk); border-radius: 3px; overflow: hidden; }
+.progress > div { height: 100%; background: var(--accent); width: 0; transition: width 0.2s; }
+table.cal td, table.cal th { padding: 2px 4px; }
+table.cal input[type="number"] { width: 72px; font-family: var(--f-mono); font-size: 0.78rem; padding: 1px 3px; }
+table.cal input[type="checkbox"] { accent-color: var(--accent); }
+.toast { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: var(--r); font-size: 0.86rem; z-index: 20; max-width: min(420px, calc(100vw - 32px)); }
+.about { max-width: 78ch; }
+.about pre { white-space: pre-wrap; font-family: var(--f-mono); font-size: 0.8rem; background: var(--sunk); padding: 10px; border-radius: var(--r); overflow-x: auto; }
+.about h3 { margin-top: 14px; }
+.about p, .about li { color: var(--ink-2); }
+.lutab input { width: 64px; font-family: var(--f-mono); font-size: 0.78rem; }
+.lutab td.txt { white-space: normal; min-width: 150px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<header class="top">
+  <div class="brand"><h1>TOPMODEL Watershed Explorer</h1><div class="site" id="siteLine"></div></div>
+  <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-page="watershed" aria-selected="true"><span class="k">1</span>Watershed</button>
+    <button role="tab" data-page="data"><span class="k">2</span>Data</button>
+    <button role="tab" data-page="model"><span class="k">3</span>Model</button>
+    <button role="tab" data-page="calibrate"><span class="k">4</span>Calibrate</button>
+    <button role="tab" data-page="scenario"><span class="k">5</span>Scenarios</button>
+    <button role="tab" data-page="about"><span class="k">6</span>Export &amp; about</button>
+  </nav>
+</header>
+
+<main>
+<!-- ============================ 1 WATERSHED ============================ -->
+<section class="page" id="pg-watershed">
+  <div class="col">
+    <p class="lede">Eleven CAMELS gauged watersheds with ten water years (Oct 2004 – Sep 2014) of Daymet forcing and USGS daily discharge. Four are in Virginia, one per physiographic province; the other seven span the main US climates. Topography for each comes from a 30 m 3DEP DEM. Pick one, then run, calibrate and test land-use change on the next pages.</p>
+    <div class="card mapwrap"><svg class="us" id="usmap" viewBox="0 0 975 810" role="img" aria-label="Map of the eleven example watersheds"></svg></div>
+    <div class="secthead"><h2>Virginia</h2><span class="note">Valley &amp; Ridge to Coastal Plain</span></div>
+    <div class="wsgrid" id="wsVA"></div>
+    <div class="secthead"><h2>Other climates</h2><span class="note">Snowmelt, rainforest, Mediterranean, desert and karst</span></div>
+    <div class="wsgrid" id="wsOther"></div>
+  </div>
+</section>
+
+<!-- ============================ 2 DATA ============================ -->
+<section class="page" id="pg-data" hidden>
+  <div class="split">
+    <aside class="side">
+      <div class="eyebrow">Simulation</div>
+      <div class="grid2">
+        <label class="field"><span>Start</span><input type="date" id="simStart"></label>
+        <label class="field"><span>End</span><input type="date" id="simEnd"></label>
+      </div>
+      <label class="field"><span>Warm-up (days, excluded from statistics)</span><input type="number" id="warm" min="0" step="1" value="365"></label>
+      <label class="field"><span>Precipitation multiplier (corrects gauge undercatch)</span><input type="number" id="pMult" min="0.5" max="2" step="0.01" value="1"></label>
+      <p class="note small" id="pMultNote"></p>
+      <div class="eyebrow">Watershed</div>
+      <div class="tblwrap"><table class="t" id="attrTbl"></table></div>
+      <div class="eyebrow">Topographic index</div>
+      <p class="note small" id="tiNote"></p>
+    </aside>
+    <div class="col">
+      <div class="card"><h3>Daily forcing and observed discharge</h3><div class="plot" id="pData" style="height:620px"></div></div>
+      <div class="card"><h3>Monthly climate</h3><div class="plot" id="pClim" style="height:300px"></div></div>
+      <div class="card"><h3>Topographic index distribution</h3><div class="plot" id="pTI" style="height:260px"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 3 MODEL ============================ -->
+<section class="page" id="pg-model" hidden>
+  <div class="split">
+    <aside class="side stick" id="modelSide">
+      <div class="row"><button class="btn primary" id="btnRun">Run model</button>
+        <label class="sw"><input type="checkbox" id="autoRun" checked>Auto-run</label>
+        <button class="btn small" id="btnReset" title="Back to this watershed's starting values">Reset</button></div>
+      <div class="row"><span class="note small">Parameter set</span>
+        <button class="btn small" id="btnStartSet">Starting values</button>
+        <button class="btn small" id="btnPreSet">Pre-calibrated</button></div>
+      <p class="note small" id="setNote"></p>
+      <div class="eyebrow">Model components</div>
+      <label class="sw"><input type="checkbox" id="cbSSF">Shallow subsurface stormflow</label>
+      <label class="sw"><input type="checkbox" id="cbIE">Infiltration-excess runoff</label>
+      <label class="sw"><input type="checkbox" id="cbImp">Impervious-area direct runoff</label>
+      <label class="sw"><input type="checkbox" id="cbRoute" checked>Channel routing</label>
+      <div id="paramGroups"></div>
+    </aside>
+    <div class="col">
+      <div class="kpis" id="kpis"></div>
+      <div class="card">
+        <div class="subtabs" id="mtabs">
+          <button data-t="hyd" aria-selected="true">Hydrograph</button><button data-t="wb">Water balance</button>
+          <button data-t="et">ET &amp; canopy</button><button data-t="sto">Storage &amp; snow</button>
+          <button data-t="sat">Saturated area</button><button data-t="fit">Fit statistics</button>
+        </div>
+        <div data-v="hyd">
+          <div class="row"><label class="sw"><input type="checkbox" id="cbLog">Log scale</label>
+            <label class="sw"><input type="checkbox" id="cbComp">Flow components</label>
+            <label class="sw"><input type="checkbox" id="cbFdc">Flow duration curve</label></div>
+          <div class="plot" id="pHyd" style="height:600px"></div>
+          <p class="note small">Drag to zoom; double-click to reset. Zooming one time-series plot zooms the others.</p>
+        </div>
+        <div data-v="wb" hidden><div class="plot" id="pWB" style="height:340px"></div><div class="tblwrap"><table class="t" id="tblWB"></table></div>
+          <p class="note small">Water years (Oct–Sep). Closure = P − ET − Q − ΔS − Δchannel storage; it stays at round-off (≈ 0) because the model conserves mass exactly.</p></div>
+        <div data-v="et" hidden><div class="plot" id="pET" style="height:330px"></div><div class="plot" id="pETm" style="height:300px"></div><div class="plot" id="pLAI" style="height:240px"></div></div>
+        <div data-v="sto" hidden><div class="plot" id="pSnow" style="height:250px"></div><div class="plot" id="pSto" style="height:300px"></div><div class="plot" id="pSat" style="height:250px"></div></div>
+        <div data-v="sat" hidden>
+          <div class="satgrid">
+            <figure class="satmap">
+              <canvas id="satCanvas" width="10" height="10" aria-label="Map of saturated area"></canvas>
+              <figcaption class="row" style="justify-content:space-between">
+                <span class="row" style="gap:12px"><span class="key"><i style="background:var(--sat)"></i>Saturated</span><span class="key"><i class="ramp"></i>Hillshade, 30 m 3DEP</span></span>
+                <span class="scale"><i id="scaleBar"></i><span id="scaleLbl" class="mono"></span></span>
+              </figcaption>
+            </figure>
+            <div class="col" style="gap:6px">
+              <div class="satday"><span class="d mono" id="satDate"></span><span class="pct mono" id="satPct"></span><span class="note small">of the watershed saturated</span></div>
+              <p class="note mono small" id="dayLbl"></p>
+              <div class="plot" id="pSatTI" style="height:260px; min-height:200px"></div>
+            </div>
+          </div>
+          <div class="plot" id="pSatStrip" style="height:190px; min-height:150px"></div>
+          <div class="row">
+            <button class="btn primary small" id="btnPlay">Play</button>
+            <input type="range" id="daySlider" min="0" max="1" value="0" style="flex:1; min-width:160px; accent-color: var(--accent)" aria-label="Day">
+            <label class="field" style="flex-direction:row; align-items:center; gap:6px"><span>Animate</span><select id="animWin"></select></label>
+            <label class="field" style="flex-direction:row; align-items:center; gap:6px"><span>Speed</span><select id="animSpeed"><option value="250">Slow</option><option value="90" selected>Normal</option><option value="30">Fast</option></select></label>
+          </div>
+          <p class="note small">Blue classes are saturated to the surface: their local deficit S<sub>i</sub> = S̄ + m(λ − TI<sub>i</sub>) is ≤ 0. Wet, convergent areas (high TI) saturate first and the saturated area spreads up the valleys as the deficit S̄ falls. On the map, a pixel covering several 30 m cells is shaded by the share of them that is saturated. Use the arrow keys on the slider to step one day.</p>
+        </div>
+        <div data-v="fit" hidden><div class="tblwrap"><table class="t" id="tblPerf"></table></div><div class="plot" id="pScatter" style="height:420px"></div><pre class="note mono" id="runSummary" style="white-space:pre-wrap"></pre></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 4 CALIBRATE ============================ -->
+<section class="page" id="pg-calibrate" hidden>
+  <div class="split">
+    <aside class="side">
+      <label class="field"><span>Objective (maximised)</span>
+        <select id="obj"><option>KGE</option><option>NSE</option><option>NSE of log Q</option><option>Mean of NSE and log NSE</option><option>KGE of sqrt Q</option></select></label>
+      <div class="grid2">
+        <label class="field"><span>Calibration from</span><input type="date" id="calStart"></label>
+        <label class="field"><span>to (later = validation)</span><input type="date" id="calEnd"></label>
+      </div>
+      <div class="eyebrow">Parameters to calibrate</div>
+      <p class="note small">Only parameters of components that are on are listed. Min and Max set the search range; m, Srmax, td, Q0 and the stormflow rates are searched in log space.</p>
+      <div class="tblwrap" style="max-height:300px; overflow-y:auto; border:1px solid var(--line); border-radius:4px"><table class="t cal" id="calTbl"></table></div>
+      <button class="btn small" id="btnCalReset">Reset the table</button>
+      <div class="eyebrow">SCE-UA settings</div>
+      <div class="grid2">
+        <label class="field"><span>Complexes</span><input type="number" id="ngs" value="3" min="1" max="20" step="1"></label>
+        <label class="field"><span>Max model runs</span><input type="number" id="maxn" value="2000" min="50" step="50"></label>
+        <label class="field"><span>Stop if change &lt; %</span><input type="number" id="pcento" value="0.1" min="0" step="0.05"></label>
+        <label class="field"><span>over shuffles</span><input type="number" id="kstop" value="5" min="1" step="1"></label>
+        <label class="field"><span>Random seed</span><input type="number" id="seed" value="1" min="0" step="1"></label>
+      </div>
+      <label class="sw"><input type="checkbox" id="calAuto" checked>Apply the best parameters when done</label>
+      <div class="row"><button class="btn primary" id="btnCal">Run SCE-UA</button><button class="btn" id="btnCalStop" disabled>Stop</button><button class="btn" id="btnCalApply" disabled>Apply best</button></div>
+      <div class="progress"><div id="calBar"></div></div>
+      <p class="note small mono" id="calMsg"></p>
+    </aside>
+    <div class="col">
+      <div class="card"><h3>Search progress</h3><div class="plot" id="pCal" style="height:300px"></div></div>
+      <div class="card"><h3>Parameters</h3><div class="tblwrap"><table class="t" id="calRes"></table></div></div>
+      <div class="card"><h3>Calibration and validation fit</h3><div class="plot" id="pCalHyd" style="height:360px"></div><div class="tblwrap"><table class="t" id="tblPerfCal"></table></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 5 SCENARIOS ============================ -->
+<section class="page" id="pg-scenario" hidden>
+  <div class="split">
+    <aside class="side">
+      <label class="field"><span>Scenario</span><select id="luPreset"></select></label>
+      <p class="note small" id="luNote"></p>
+      <div class="eyebrow">Where</div>
+      <label class="field"><span>Changed area</span><select id="luWhere">
+        <option value="whole">Whole watershed</option><option value="pct">Percent of the watershed (patches)</option>
+        <option value="dry">Driest uplands (lowest TI first)</option><option value="rip">All except a riparian buffer (wettest TI)</option></select></label>
+      <label class="field" id="luPctF"><span>Percent of the watershed changed</span><input type="number" id="luPct" value="30" min="0" max="100" step="1"></label>
+      <label class="field" id="luBufF"><span>Riparian buffer left unchanged (% of watershed)</span><input type="number" id="luBuf" value="10" min="0" max="90" step="1"></label>
+      <p class="note small" id="luArea"></p>
+      <div class="eyebrow">When</div>
+      <label class="field"><span>Date of change</span><input type="date" id="luDate"></label>
+      <div class="grid2">
+        <label class="field"><span>Recovery shape</span><select id="luCurve"><option value="exponential">Exponential (95% at the recovery time)</option><option value="linear">Linear</option><option value="step">Step (end state at once)</option><option value="none">None (stays at the start state)</option></select></label>
+        <label class="field"><span>Recovery time (yr)</span><input type="number" id="luRecY" value="8" min="0.01" step="0.5"></label>
+      </div>
+      <details class="grp"><summary>Before the change / soils</summary>
+        <label class="field"><span>Land use before the change</span><select id="luPre"><option value="baseline">Same as the rest of the watershed</option><option value="pasture">Pasture / grassland</option><option value="crop">Cropland</option><option value="shrub">Shrub / old field</option></select></label>
+        <label class="field"><span>Compaction / water-repellency recovery (yr, blank = none)</span><input type="number" id="luCompRec" value="5" min="0.01" step="0.5"></label>
+      </details>
+      <details class="grp"><summary>Development</summary>
+        <label class="field"><span>New impervious share of the changed area</span><input type="number" id="luImp" value="0" min="0" max="0.95" step="0.05"></label>
+        <div class="grid2"><label class="field"><span>Build-out time (yr)</span><input type="number" id="luBuild" value="5" min="0.01" step="0.5"></label>
+        <label class="field"><span>Directly connected fraction</span><input type="number" id="luConn" value="0.6" min="0" max="1" step="0.05"></label></div>
+        <label class="sw"><input type="checkbox" id="luDet">Stormwater detention</label>
+        <label class="field"><span>Detention outflow rate (1/d)</span><input type="number" id="luKdet" value="0.3" min="0.001" step="0.05"></label>
+      </details>
+      <details class="grp"><summary>Insect defoliation</summary>
+        <div class="grid2"><label class="field"><span>From day of year</span><input type="number" id="luD1" value="152" min="1" max="366"></label>
+        <label class="field"><span>Until day of year</span><input type="number" id="luD2" value="196" min="1" max="366"></label>
+        <label class="field"><span>LAI lost (fraction)</span><input type="number" id="luSev" value="0.7" min="0" max="1" step="0.05"></label>
+        <label class="field"><span>Outbreak years</span><input type="number" id="luYrs" value="0" min="0" max="50" step="1"></label></div>
+      </details>
+      <details class="grp"><summary>Land-use states (advanced)</summary>
+        <p class="note small">Blank = same as the baseline forest. Edit any cell, then run.</p>
+        <div class="tblwrap"><table class="t lutab" id="luTbl"></table></div>
+      </details>
+      <button class="btn primary" id="btnScen">Run baseline + scenario</button>
+      <p class="note small" id="scenMsg"></p>
+    </aside>
+    <div class="col">
+      <div class="kpis" id="scenKpis"></div>
+      <div class="card"><h3>Discharge: baseline and scenario</h3><div class="plot" id="pScen" style="height:380px"></div></div>
+      <div class="card"><h3>Change by water year (scenario − baseline)</h3><div class="plot" id="pScenAnn" style="height:320px"></div></div>
+      <div class="card"><h3>Flow duration after the change</h3><div class="plot" id="pScenFdc" style="height:320px"></div></div>
+      <div class="card"><h3>Annual table</h3><div class="tblwrap"><table class="t" id="tblScen"></table></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 6 EXPORT & ABOUT ============================ -->
+<section class="page" id="pg-about" hidden>
+  <div class="col about">
+    <div class="card">
+      <h3>Export results</h3>
+      <p class="note">Daily results of the current run (forcing, fluxes, storages and observed discharge) as CSV, and the parameter set as JSON. Copy works everywhere; downloading works when this page is opened as a standalone file.</p>
+      <div class="row">
+        <button class="btn" id="btnCopyCsv">Copy daily CSV</button><button class="btn" id="btnDlCsv">Download daily CSV</button>
+        <button class="btn" id="btnCopyPar">Copy parameters (JSON)</button><button class="btn" id="btnCopyScen">Copy scenario annual table</button>
+      </div>
+      <textarea id="copyFallback" hidden style="width:100%; height:120px; font-family: var(--f-mono); font-size: 0.75rem"></textarea>
+    </div>
+    <div class="card">
+      <h3>About this version</h3>
+      <p>A browser port of the Enhanced TOPMODEL R/Shiny app. The model core (Penman–Monteith PET, rain and snow interception, degree-day snow, optional stormflow zone, infiltration excess, impervious runoff, two-tile land-use change and channel routing) is translated line for line from <span class="mono">topmodel_core.R</span>; on test runs it reproduces the R output to within 1e-13 mm/d. SCE-UA calibration runs in a background thread.</p>
+      <h3>Data</h3>
+      <ul>
+        <li>Forcing: Daymet basin means from CAMELS (Newman et al. 2015): precipitation, Tmax, Tmin, shortwave (srad × day length) and vapour pressure. No wind, so the wind parameter is used.</li>
+        <li>Discharge: USGS daily mean flow (CAMELS quality-controlled), converted to mm/d with the GAGES-II drainage area.</li>
+        <li>Attributes (area, slope, LAI, climate indices, land cover): CAMELS attributes v2.0 (Addor et al. 2017). Canopy starting values use the CAMELS MODIS LAI maximum and seasonal range.</li>
+      </ul>
+      <h3>Differences from the R app</h3>
+      <ul>
+        <li>Watersheds are fixed to these eleven examples; DEM delineation and the Daymet, NLCD and MODIS downloads are not available in the browser.</li>
+        <li>Topography is precomputed: 30 m 3DEP DEMs delineated at the gauges with twi_watershed_usgs.m (priority-flood, D8 watershed, MD-infinity TWI), 30 equal-width TWI classes as in the R app, and D8 channel distances to the outlet (200-bin histogram) for routing.</li>
+        <li>The saturated-area map is drawn at up to 320 pixels across (one map pixel = 1–8 DEM cells); a pixel's shade is the saturated share of its 30 m cells. Land-use change areas are placed by TWI class.</li>
+        <li>DREAMzs uncertainty analysis is not included; SCE-UA is.</li>
+        <li>The pre-calibrated sets come from SCE-UA (KGE, 3,000 runs, first 60% after warm-up) on m, ln Te, Srmax, td, DDF, rl and channel velocity, plus Ks with infiltration excess on for the two dryland basins.</li>
+        <li>Seco Creek and Cave Creek fit poorly even after calibration (validation KGE near or below 0). Ephemeral, storm-driven runoff from daily data with saturation-excess physics is a known weak spot of TOPMODEL; they are included to show it.</li>
+      </ul>
+      <h3>Formulation</h3>
+      <pre id="aboutTxt"></pre>
+    </div>
+  </div>
+</section>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script id="modelsrc">/*MODEL*/</script>
+<script>/*SETUP*/</script>
+<script>
+const DATA = /*DATA*/;
+const MAP = /*MAP*/;
+const PRESETS = /*PRESETS*/;
+const TWI = /*TWI*/;
+</script>
+<script>
+"use strict";
+const S = SETUP, $ = id => document.getElementById(id);
+const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v) || !Number.isFinite(v)) ? "–" : v.toFixed(d);
+const sig = (v, n = 4) => (v === null || !Number.isFinite(v)) ? "–" : (+v.toPrecision(n)).toString();
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const isoDate = d => d.toISOString().slice(0, 10);
+const wy = d => d.getUTCMonth() >= 9 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
+
+function toast(msg, ms = 2600) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, ms); }
+
+// ------------------------------------------------------------------ state
+const st = { id: null, b: null, D: [], i0: 0, i1: 0, warm: 365, pMult: 1, lam: 7, TI: null, p: null, route: true,
+  out: null, dts: [], obs: [], calStart: null, calEnd: null, calBest: null, scen: null, set: "start" };
+const ALB_KEYS = ["albedo", "albLeafOn", "albLeafOff"];
+
+function inactiveKeys() {
+  const k = [], p = st.p;
+  if (!p.ssfOn) k.push("Mssf", "kssf", "kv");
+  if (!p.ieOn) k.push("Ks", "ieMoist", "stormSum", "stormWin", "ieConn");
+  if (!p.impOn) k.push("impPct", "fConn", "Sdep");
+  if (p.albMode === 0) k.push("albLeafOn", "albLeafOff"); else k.push("albedo");
+  if (!st.route) k.push("chv");
+  return k;
+}
+
+function loadBasin(id) {
+  stopPlay();
+  const b = DATA[id]; st.id = id; st.b = b; st.D = S.dates(b);
+  st.i0 = 0; st.i1 = b.P.length - 1; st.warm = 365; st.pMult = 1;
+  st.tw = TWI[id]; st.TI = S.realTI(st.tw); st.lam = st.TI.lambda;
+  st.p = S.startParams(b); st.set = "start"; plotSatTI.init = false; calState.trace = []; st.route = true; st.calBest = null; st.scen = null;
+  setCalDefaults();
+  const m = S.META[id];
+  $("siteLine").innerHTML = `<b>${m.short}</b>, ${m.state} · USGS <span class="mono">${id}</span> · ${m.climate}`;
+  $("simStart").value = isoDate(st.D[0]); $("simEnd").value = isoDate(st.D[st.D.length - 1]);
+  $("simStart").min = $("simEnd").min = isoDate(st.D[0]); $("simStart").max = $("simEnd").max = isoDate(st.D[st.D.length - 1]);
+  $("warm").value = 365; $("pMult").value = 1;
+  const ti = st.tw.ti;
+  $("tiNote").textContent = `From the 30 m 3DEP DEM: MD-infinity TWI = ln(a/tan β) over ${ti.n.toLocaleString()} cells (${st.tw.area.toFixed(1)} km², CAMELS ${b.area_km2.toFixed(1)} km²), grouped in ${ti.val.length} equal-width classes. Mean λ = ${ti.lambda_.toFixed(2)}, SD ${ti.sd.toFixed(2)}, range ${ti.min.toFixed(1)}–${ti.max.toFixed(1)}.`;
+  $("pMultNote").textContent = id === "12040500" ? "Observed runoff here exceeds Daymet precipitation (Q/P ≈ 1.16), a known Daymet undercatch in the Olympics. Try 1.3–1.5." : "";
+  const dc = new Date(Date.UTC(2007, 9, 1)); $("luDate").value = isoDate(dc);
+  syncSwitches(); buildParamUI(); buildCalTable(); renderWsCards(); drawMap(); run(); renderData();
+  calState.result = null; $("btnCalApply").disabled = true; Plotly.purge("pCal"); $("calRes").innerHTML = ""; $("calMsg").textContent = "";
+  clearScen();
+}
+function setCalDefaults() {
+  const n = st.i1 - st.i0 + 1, w = Math.min(st.warm, n - 1);
+  st.calStart = st.D[st.i0 + w]; st.calEnd = st.D[st.i0 + w + Math.round(0.6 * (n - 1 - w))];
+  $("calStart").value = isoDate(st.calStart); $("calEnd").value = isoDate(st.calEnd);
+}
+
+// ------------------------------------------------------------------ run
+function routing() { return st.route ? S.demRouting(st.tw) : null; }
+function currentForcing() { return S.forcing(st.b, st.i0, st.i1, st.pMult); }
+function run() {
+  const t0 = performance.now();
+  const F = currentForcing();
+  st.out = TM.core(F, st.TI, st.p, routing());
+  st.F = F; st.dts = st.D.slice(st.i0, st.i1 + 1); st.obs = st.b.Q.slice(st.i0, st.i1 + 1);
+  st.runMs = performance.now() - t0;
+  renderModel();
+}
+let runTimer = null;
+function autoRun() { if (!$("autoRun").checked) return; clearTimeout(runTimer); runTimer = setTimeout(() => { run(); if (st.scen) runScenario(true); }, 60); }
+
+function periods() {
+  const n = st.dts.length, w = Math.min(st.warm, n - 1), kE = [], kC = [], kV = [];
+  for (let t = w; t < n; t++) {
+    kE.push(t);
+    if (st.dts[t] >= st.calStart && st.dts[t] <= st.calEnd) kC.push(t); else kV.push(t);
+  }
+  return { kE, kC, kV, w };
+}
+const withObs = k => k.filter(t => st.obs[t] !== null);
+function metrics(k) { k = withObs(k); return k.length > 10 ? TM.perfMetrics(k.map(t => st.obs[t]), k.map(t => st.out.Qsim[t])) : null; }
+
+// ------------------------------------------------------------------ plotting helpers
+function baseLayout(extra = {}) {
+  const ink = css("--ink"), ink2 = css("--ink-2"), line = css("--line");
+  return Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: "IBM Plex Sans, system-ui, sans-serif", size: 12, color: ink2 },
+    margin: { l: 58, r: 14, t: 10, b: 38 }, hovermode: "x unified",
+    hoverlabel: { bgcolor: css("--panel"), bordercolor: line, font: { color: ink, family: "IBM Plex Mono, monospace", size: 11 } },
+    legend: { orientation: "h", y: 1.08, x: 0, font: { color: ink2 } },
+    xaxis: { gridcolor: line, linecolor: line, zeroline: false, tickfont: { color: ink2 } },
+    yaxis: { gridcolor: line, linecolor: line, zeroline: false, tickfont: { color: ink2 }, title: { font: { color: ink2 } } },
+  }, extra);
+}
+const PCFG = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"], toImageButtonOptions: { scale: 2 } };
+function ax(title, extra = {}) { const line = css("--line"), ink2 = css("--ink-2"); if (extra.type === "log") extra = Object.assign({ dtick: 1, exponentformat: "none" }, extra); return Object.assign({ title: { text: title, font: { color: ink2, size: 12 } }, gridcolor: line, linecolor: line, zeroline: false, tickfont: { color: ink2 } }, extra); }
+function plot(id, traces, layout) { Plotly.react(id, traces, layout, PCFG); }
+const C = n => css("--s" + n);
+// shared zoom across time-series plots
+const TS_PLOTS = ["pHyd", "pET", "pLAI", "pSnow", "pSto", "pSat", "pData", "pScen", "pCalHyd"];
+let syncing = false, tWin = null;
+function hookSync(id) {
+  const el = $(id); if (el._hooked) return; el._hooked = true;
+  el.on("plotly_relayout", e => {
+    if (syncing) return;
+    let r = null;
+    for (const k of Object.keys(e)) { const m = k.match(/^xaxis\d*\.range\[0\]$/); if (m) r = [e[k], e[k.replace("[0]", "[1]")]]; if (/^xaxis\d*\.range$/.test(k)) r = e[k]; }
+    const auto = Object.keys(e).some(k => /^xaxis\d*\.autorange$/.test(k));
+    if (!r && !auto) return;
+    tWin = auto ? null : r; syncing = true;
+    for (const o of TS_PLOTS) if (o !== id && $(o).data && !$(o).closest("[hidden]")) applyWin(o);
+    syncing = false;
+  });
+}
+function applyWin(id) {
+  const el = $(id); if (!el.layout) return;
+  const upd = {}; for (const k of Object.keys(el.layout)) if (/^xaxis\d*$/.test(k)) { if (tWin) upd[k + ".range"] = tWin.slice(); else upd[k + ".autorange"] = true; }
+  Plotly.relayout(id, upd);
+}
+
+// ------------------------------------------------------------------ watershed page
+function renderWsCards() {
+  const card = id => {
+    const b = DATA[id], m = S.META[id], qp = b.runoff_ratio;
+    return `<button class="ws" data-id="${id}" aria-pressed="${id === st.id}">
+      <span class="nm">${m.short}</span>
+      <span class="loc">${m.region}, ${m.state} · <span class="gid">USGS ${id}</span></span>
+      <span class="clim">${m.climate}</span>
+      <dl><dt>Area</dt><dd>${b.area_km2 < 100 ? b.area_km2.toFixed(1) : Math.round(b.area_km2)} km²</dd>
+          <dt>P</dt><dd>${Math.round(b.p_mean * 365.25)} mm</dd>
+          <dt>Q/P</dt><dd>${qp.toFixed(2)}</dd>
+          <dt>Snow</dt><dd>${Math.round(b.frac_snow * 100)}%</dd></dl>
+    </button>`;
+  };
+  const va = S.ORDER.filter(i => S.META[i].state === "VA"), ot = S.ORDER.filter(i => S.META[i].state !== "VA");
+  $("wsVA").innerHTML = va.map(card).join(""); $("wsOther").innerHTML = ot.map(card).join("");
+  document.querySelectorAll(".ws").forEach(el => el.onclick = () => { if (el.dataset.id !== st.id) { loadBasin(el.dataset.id); toast(`Loaded ${S.META[el.dataset.id].short}. Starting values are set; open Model to explore.`); } });
+}
+function drawMap() {
+  const svg = $("usmap"), [[x0, y0], [x1, y1]] = MAP.vaBounds;
+  const sc = 2.2, w = (x1 - x0) * sc, h = (y1 - y0) * sc, ix = 975 - w - 8, iy = 622;
+  let s = MAP.states.map(f => `<path class="st${f.n === "Virginia" ? " va" : ""}" d="${f.d}"></path>`).join("");
+  const lab = { "11143000": [8, 16], "11266500": [8, -6], "12040500": [8, 4], "01013500": [-10, -10, "end"], "08202700": [8, 4], "09512280": [8, 4], "09352900": [8, 4] };
+  for (const id of S.ORDER) {
+    if (S.META[id].state === "VA") continue;
+    const [x, y] = MAP.pts[id], L = lab[id] || [8, 4];
+    s += `<g class="pt${id === st.id ? " sel" : ""}" data-id="${id}" tabindex="0" role="button" aria-label="${S.META[id].short}"><circle cx="${x}" cy="${y}" r="6"></circle><text x="${x + L[0]}" y="${y + L[1]}" text-anchor="${L[2] || "start"}">${S.META[id].short}</text></g>`;
+  }
+  // Virginia inset
+  s += `<path class="lead" d="M${(x0 + x1) / 2} ${y1} L${ix + w / 2} ${iy - 4}"></path>`;
+  s += `<rect class="inset-frame" x="${ix - 4}" y="${iy - 4}" width="${w + 8}" height="${h + 8}" rx="4"></rect>`;
+  s += `<g transform="translate(${ix - x0 * sc},${iy - y0 * sc}) scale(${sc})"><path class="st va" d="${MAP.vaD}" style="stroke-width:${0.8 / sc}"></path></g>`;
+  const vaLab = { "01669000": [9, 4], "02038850": [9, 13], "02028500": [-9, -6, "end"], "02017500": [-9, 13, "end"] };
+  for (const id of S.ORDER.filter(i => S.META[i].state === "VA")) {
+    const [px, py] = MAP.pts[id], x = ix + (px - x0) * sc, y = iy + (py - y0) * sc, L = vaLab[id];
+    s += `<circle cx="${px}" cy="${py}" r="2.2" style="fill:var(--va)"></circle>`;
+    s += `<g class="pt va${id === st.id ? " sel" : ""}" data-id="${id}" tabindex="0" role="button" aria-label="${S.META[id].short}"><circle cx="${x}" cy="${y}" r="6"></circle><text x="${x + L[0]}" y="${y + L[1]}" text-anchor="${L[2] || "start"}">${S.META[id].short}</text></g>`;
+  }
+  s += `<text x="${ix + 4}" y="${iy + 14}" style="font: 600 11px var(--f-body); fill: var(--ink-3); letter-spacing: .08em">VIRGINIA</text>`;
+  svg.innerHTML = s;
+  svg.querySelectorAll(".pt").forEach(g => { const go = () => { if (g.dataset.id !== st.id) loadBasin(g.dataset.id); }; g.onclick = go; g.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
+}
+
+// ------------------------------------------------------------------ data page
+function renderData() {
+  const b = st.b, m = S.META[st.id], D = st.D.slice(st.i0, st.i1 + 1), sl = a => a.slice(st.i0, st.i1 + 1);
+  const rows = [["Gauge", b.name], ["Province / range", m.region], ["Climate", m.climate], ["Drainage area", `${b.area_km2.toFixed(1)} km²`],
+    ["Mean elevation", `${Math.round(b.elev)} m`], ["Mean slope", `${b.slope.toFixed(1)} m/km`], ["Mean P (CAMELS)", `${Math.round(b.p_mean * 365.25)} mm/yr`],
+    ["Mean PET (CAMELS)", `${Math.round(b.pet_mean * 365.25)} mm/yr`], ["Aridity PET/P", b.aridity.toFixed(2)], ["Snow fraction of P", `${Math.round(b.frac_snow * 100)}%`],
+    ["Runoff ratio", b.runoff_ratio.toFixed(2)], ["Baseflow index", b.bfi.toFixed(2)], ["Forest cover", `${Math.round(b.frac_forest * 100)}%`],
+    ["Land cover", b.land], ["Geology", b.geol]];
+  $("attrTbl").innerHTML = rows.map(r => `<tr><td class="txt">${r[0]}</td><td class="txt" style="text-align:right; white-space:normal">${r[1]}</td></tr>`).join("") +
+    `<tr><td class="txt" colspan="2" style="white-space:normal; color:var(--ink-2)">${m.blurb}</td></tr>`;
+  const P = sl(b.P).map(v => v * st.pMult);
+  plot("pData", [
+    { x: D, y: P, type: "bar", name: "Precipitation", marker: { color: C(1) }, yaxis: "y", hovertemplate: "%{y:.1f} mm" },
+    { x: D, y: sl(b.Tx), type: "scatter", mode: "lines", name: "Tmax", line: { color: C(2), width: 1 }, xaxis: "x2", yaxis: "y2", hovertemplate: "%{y:.1f} °C" },
+    { x: D, y: sl(b.Tn), type: "scatter", mode: "lines", name: "Tmin", line: { color: C(7), width: 1 }, xaxis: "x2", yaxis: "y2", hovertemplate: "%{y:.1f} °C" },
+    { x: D, y: sl(b.Q), type: "scatter", mode: "lines", name: "Observed Q", line: { color: css("--obs"), width: 1.2 }, xaxis: "x3", yaxis: "y3", hovertemplate: "%{y:.2f} mm/d" },
+  ], baseLayout({
+    xaxis: ax("", { anchor: "y", matches: "x3", showticklabels: false }), xaxis2: ax("", { anchor: "y2", matches: "x3", showticklabels: false }), xaxis3: ax("", { anchor: "y3" }),
+    yaxis: ax("P (mm/d)", { domain: [0.72, 1] }), yaxis2: ax("T (°C)", { domain: [0.38, 0.68] }), yaxis3: ax("Q (mm/d)", { domain: [0, 0.34] }),
+    bargap: 0, margin: { l: 58, r: 14, t: 26, b: 30 } }));
+  // monthly climatology
+  const mP = new Array(12).fill(0), mQ = new Array(12).fill(0), mT = new Array(12).fill(0), cn = new Array(12).fill(0), cq = new Array(12).fill(0);
+  D.forEach((d, j) => { const mo = d.getUTCMonth(); mP[mo] += P[j]; mT[mo] += (b.Tx[st.i0 + j] + b.Tn[st.i0 + j]) / 2; cn[mo]++; const q = b.Q[st.i0 + j]; if (q !== null) { mQ[mo] += q; cq[mo]++; } });
+  const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  plot("pClim", [
+    { x: mon, y: mP.map((v, i) => v / cn[i] * 30.4), type: "bar", name: "Precipitation", marker: { color: C(1) }, hovertemplate: "%{y:.0f} mm/month" },
+    { x: mon, y: mQ.map((v, i) => v / cq[i] * 30.4), type: "bar", name: "Observed Q", marker: { color: C(3) }, hovertemplate: "%{y:.0f} mm/month" },
+  ], baseLayout({ barmode: "group", bargap: 0.25, bargroupgap: 0.08, yaxis: ax("mm/month"), hovermode: "x unified",
+    annotations: [{ xref: "paper", yref: "paper", x: 1, y: 1.12, showarrow: false, xanchor: "right", font: { size: 11, color: css("--ink-2") },
+      text: "Mean temperature: " + mT.map((v, i) => (v / cn[i]).toFixed(0)).join(" · ") + " °C" }], margin: { l: 58, r: 14, t: 30, b: 30 } }));
+  renderTI();
+}
+function renderTI() {
+  plot("pTI", [{ x: st.TI.val, y: st.TI.frac.map(f => f * 100), type: "bar", marker: { color: C(1) }, hovertemplate: "TI %{x:.2f}: %{y:.2f}% of area<extra></extra>" }],
+    baseLayout({ xaxis: ax("Topographic index ln(a / tan β)"), yaxis: ax("% of area"), bargap: 0.1, hovermode: "closest",
+      shapes: [{ type: "line", x0: st.lam, x1: st.lam, yref: "paper", y0: 0, y1: 1, line: { color: css("--ink"), dash: "dot", width: 1.5 } }],
+      annotations: [{ x: st.lam, yref: "paper", y: 1, text: `λ = ${st.lam.toFixed(2)}`, showarrow: false, xanchor: "left", xshift: 4, font: { color: css("--ink") } }] }));
+}
+
+// ------------------------------------------------------------------ parameter UI
+const GROUPS = [["top", "Soil and groundwater", true], ["init", "Initial conditions"], ["can", "Canopy and ET"], ["alb", "Albedo"], ["snow", "Snow"],
+  ["ssf", "Stormflow zone"], ["ie", "Infiltration excess"], ["imp", "Impervious area"], ["rout", "Routing"]];
+const SLN = 400;
+const toSl = (r, v) => { const a = r.isLog ? Math.log10(r.min) : r.min, b = r.isLog ? Math.log10(r.max) : r.max, x = r.isLog ? Math.log10(Math.max(v, 1e-12)) : v; return Math.round(Math.min(Math.max((x - a) / (b - a), 0), 1) * SLN); };
+const fromSl = (r, s) => { const a = r.isLog ? Math.log10(r.min) : r.min, b = r.isLog ? Math.log10(r.max) : r.max, x = a + (b - a) * s / SLN; return r.isLog ? Math.pow(10, x) : x; };
+function buildParamUI() {
+  const box = $("paramGroups"), open = new Set([...box.querySelectorAll("details[open]")].map(d => d.dataset.g));
+  if (!box.children.length) open.add("top");
+  let h = "";
+  for (const [g, title] of GROUPS) {
+    h += `<details class="grp" data-g="${g}"${open.has(g) ? " open" : ""}><summary>${title}</summary>`;
+    if (g === "alb") h += `<label class="field"><span>Snow-free albedo source</span><select id="albMode"><option value="0">Constant</option><option value="1">Follows LAI (leaf-off to leaf-on)</option></select></label>`;
+    if (g === "ssf") h += `<p class="note small" data-off="ssfOn">Turn on shallow subsurface stormflow above (Scanlon et al. 2000).</p>`;
+    if (g === "ie") h += `<p class="note small" data-off="ieOn">Turn on infiltration-excess runoff above (daily intensity method).</p>`;
+    if (g === "imp") h += `<p class="note small" data-off="impOn">Turn on impervious-area direct runoff above.</p>`;
+    if (g === "rout") h += `<p class="note small" id="routInfo"></p>`;
+    for (const r of S.PARAMS.filter(r => r.group === g)) {
+      h += `<div class="prm" data-k="${r.key}" title="${r.tip}"><span class="lab">${r.label} <small>${r.unit}</small></span>
+        <input type="number" id="pv_${r.key}" step="any" aria-label="${r.label}"><input type="range" id="ps_${r.key}" min="0" max="${SLN}" aria-label="${r.label}"></div>`;
+    }
+    h += `</details>`;
+  }
+  box.innerHTML = h;
+  for (const r of S.PARAMS) {
+    const sl = $("ps_" + r.key), nb = $("pv_" + r.key);
+    sl.oninput = () => { setParam(r.key, fromSl(r, +sl.value), "slider"); };
+    nb.onchange = () => { const v = parseFloat(nb.value); if (Number.isFinite(v)) setParam(r.key, v, "box"); else syncParam(r.key); };
+  }
+  $("albMode").onchange = e => { st.p.albMode = +e.target.value; refreshParams(); markEdited(); autoRun(); };
+  refreshParams();
+}
+function syncParam(k) { const r = S.PBYKEY[k], v = st.p[k]; $("pv_" + k).value = +v.toFixed(Math.max(r.dig, r.isLog ? 4 : r.dig)); $("ps_" + k).value = toSl(r, v); }
+function refreshParams() {
+  const ina = new Set(inactiveKeys());
+  for (const r of S.PARAMS) { syncParam(r.key); const row = document.querySelector(`.prm[data-k="${r.key}"]`); row.classList.toggle("off", ina.has(r.key)); row.hidden = (r.group === "ssf" && !st.p.ssfOn) || (r.group === "ie" && !st.p.ieOn) || (r.group === "imp" && !st.p.impOn) || (r.group === "rout" && !st.route) || (ALB_KEYS.includes(r.key) && ina.has(r.key)); }
+  document.querySelectorAll("[data-off]").forEach(el => el.hidden = !!st.p[el.dataset.off]);
+  $("albMode").value = st.p.albMode;
+  const R = S.demRouting(st.tw);
+  $("routInfo").textContent = st.route ? `D8 flow distances to the outlet from the 30 m DEM: max ${(R.Lmax / 1000).toFixed(1)} km, mean ${(st.tw.route.mean / 1000).toFixed(1)} km. Longest travel time at ${st.p.chv.toFixed(2)} m/s: ${(R.Lmax / st.p.chv / 3600).toFixed(1)} h.` : "Routing is off: discharge reaches the outlet the same day.";
+  updateSetNote();
+}
+function setParam(k, v, src) {
+  const r = S.PBYKEY[k];
+  if (src === "slider") { const d = r.isLog ? 4 : r.dig; v = +(r.isLog ? v.toPrecision(3) : v.toFixed(d)); }
+  st.p[k] = v;
+  if (src === "slider") $("pv_" + k).value = v; else $("ps_" + k).value = toSl(r, v);
+  if (k === "chv") refreshParams();
+  markEdited(); autoRun();
+}
+function markEdited() { if (st.set !== "edited") { st.set = "edited"; updateSetNote(); } }
+function updateSetNote() {
+  const pre = PRESETS[st.id];
+  const txt = { start: "Starting values from the watershed attributes (CAMELS LAI, canopy type), other parameters at the app defaults.",
+    pre: `Pre-calibrated with SCE-UA on KGE: calibration ${fmt(pre.cal, 3)}, validation ${fmt(pre.val, 3)}.`, edited: "Edited parameter set." };
+  $("setNote").textContent = txt[st.set];
+  $("btnStartSet").setAttribute("aria-pressed", st.set === "start"); $("btnPreSet").setAttribute("aria-pressed", st.set === "pre");
+}
+function syncSwitches() { $("cbSSF").checked = !!st.p.ssfOn; $("cbIE").checked = !!st.p.ieOn; $("cbImp").checked = !!st.p.impOn; $("cbRoute").checked = st.route; }
+function applyParamSet(which) {
+  st.p = S.startParams(st.b);
+  if (which === "pre") Object.assign(st.p, PRESETS[st.id].best);
+  st.set = which; syncSwitches(); refreshParams(); buildCalTable(); run(); if (st.scen) runScenario(true);
+}
+
+// ------------------------------------------------------------------ model page rendering
+let curTab = "hyd";
+function kpiTile(t, v, s, cls) { return `<div class="kpi"><span class="t">${t}${cls ? ` <span class="pill ${cls}">${cls}</span>` : ""}</span><span class="v">${v}</span><span class="s">${s}</span></div>`; }
+const grade = v => !Number.isFinite(v) ? "" : v >= 0.7 ? "good" : v >= 0.4 ? "fair" : "poor";
+function renderModel() {
+  const o = st.out, pr = periods(), k = pr.kE, nyr = k.length / 365.25;
+  const sum = (a, kk) => kk.reduce((s, t) => s + a[t], 0);
+  const M = metrics(k);
+  let h = "";
+  if (M) {
+    h += kpiTile("KGE", fmt(M.KGE, 3), `n = ${M.n} days`, grade(M.KGE));
+    h += kpiTile("NSE", fmt(M.NSE, 3), `log NSE ${fmt(M.NSE_log, 3)}`, grade(M.NSE));
+    h += kpiTile("Bias", (M.PBIAS > 0 ? "+" : "") + fmt(M.PBIAS, 1) + "%", `obs ${Math.round(M.mean_obs * 365.25)} mm/yr`, Math.abs(M.PBIAS) < 10 ? "good" : Math.abs(M.PBIAS) < 25 ? "fair" : "poor");
+  }
+  h += kpiTile("Streamflow Q", `${Math.round(sum(o.Qsim, k) / nyr)}`, `mm/yr · P ${Math.round(sum(st.F.P, k) / nyr)}`);
+  h += kpiTile("ET", `${Math.round(sum(o.ET, k) / nyr)}`, `mm/yr · PET ${Math.round(sum(o.PET, k) / nyr)}`);
+  $("kpis").innerHTML = h;
+  renderTab();
+}
+function renderTab() {
+  if (!st.out) return;
+  ({ hyd: plotHyd, wb: plotWB, et: plotET, sto: plotSto, sat: plotSatTI, fit: plotFit })[curTab]();
+}
+function plotHyd() {
+  const o = st.out, D = st.dts, log = $("cbLog").checked;
+  if ($("cbFdc").checked) {
+    const pr = periods(), k = withObs(pr.kE);
+    const ex = a => { const v = a.slice().sort((x, y) => y - x); return { x: v.map((_, i) => 100 * (i + 1) / (v.length + 1)), y: v }; };
+    const so = ex(k.map(t => st.obs[t])), ss = ex(k.map(t => o.Qsim[t]));
+    plot("pHyd", [{ ...so, type: "scatter", mode: "lines", name: "Observed", line: { color: css("--obs"), width: 2 } },
+      { ...ss, type: "scatter", mode: "lines", name: "Simulated", line: { color: C(1), width: 2 } }],
+      baseLayout({ xaxis: ax("Exceedance probability (%)"), yaxis: ax("Q (mm/d)", { type: "log" }), hovermode: "closest" }));
+    return;
+  }
+  const tr = [{ x: D, y: st.F.P, type: "bar", name: "P", marker: { color: C(1) }, yaxis: "y", showlegend: false, hovertemplate: "%{y:.1f} mm" },
+    { x: D, y: st.obs, type: "scatter", mode: "lines", name: "Observed", line: { color: css("--obs"), width: 1.4 }, xaxis: "x2", yaxis: "y2", hovertemplate: "%{y:.3f}" },
+    { x: D, y: Array.from(o.Qsim), type: "scatter", mode: "lines", name: "Simulated", line: { color: C(1), width: 1.6 }, xaxis: "x2", yaxis: "y2", hovertemplate: "%{y:.3f}" }];
+  if ($("cbComp").checked) {
+    const comps = [["Qb", "Baseflow", 3], ["Qof", "Saturation overland flow", 2], ["Qssf", "Stormflow", 7], ["Qie", "Infiltration excess", 4], ["Qimp", "Impervious", 8], ["Qdev", "Development", 5]];
+    for (const [k, nm, c] of comps) if (o[k].some(v => v > 1e-9)) tr.push({ x: D, y: Array.from(o[k]), type: "scatter", mode: "lines", name: nm, line: { color: C(c), width: 1 }, xaxis: "x2", yaxis: "y2", hovertemplate: "%{y:.3f}" });
+  }
+  plot("pHyd", tr, baseLayout({ xaxis: ax("", { anchor: "y", showticklabels: false, matches: "x2" }), xaxis2: ax("", { anchor: "y2" }),
+    yaxis: ax("P (mm/d)", { domain: [0.8, 1], autorange: "reversed" }), yaxis2: ax("Q (mm/d)", { domain: [0, 0.74], type: log ? "log" : "linear" }),
+    bargap: 0, margin: { l: 58, r: 14, t: 28, b: 30 }, legend: { orientation: "h", y: 1.07, x: 0 } }));
+  hookSync("pHyd"); if (tWin) applyWin("pHyd");
+}
+function wyTable(o, F, extraObs = true) {
+  const D = st.dts, pr = periods(), map = new Map();
+  const stv = o.storage, n = D.length;
+  for (let t = 0; t < n; t++) {
+    const y = wy(D[t]); if (!map.has(y)) map.set(y, { WY: y, days: 0, P: 0, Snow: 0, Ei: 0, Es: 0, Ea: 0, ET: 0, PET: 0, Q: 0, Qof: 0, Qb: 0, Qssf: 0, Qie: 0, Qobs: 0, nobs: 0, dS: 0, dC: 0 });
+    const r = map.get(y); r.days++;
+    r.P += F.P[t]; r.Snow += o.snow[t]; r.Ei += o.Ei[t]; r.Es += o.Es[t]; r.Ea += o.Ea[t]; r.ET += o.ET[t]; r.PET += o.PET[t]; r.Q += o.Qsim[t];
+    r.Qof += o.Qof[t]; r.Qb += o.Qb[t]; r.Qssf += o.Qssf[t]; r.Qie += o.Qie[t] + o.Qimp[t] + o.Qcomp[t] + o.Qdev[t];
+    if (st.obs[t] !== null) { r.Qobs += st.obs[t]; r.nobs++; }
+    r.dS += stv[t] - (t ? stv[t - 1] : o.S0); r.dC += o.chanStore[t] - (t ? o.chanStore[t - 1] : 0);
+  }
+  return [...map.values()].map(r => ({ ...r, closure: r.P - r.ET - r.Q - r.dS - r.dC }));
+}
+function plotWB() {
+  const T = wyTable(st.out, st.F), x = T.map(r => "WY" + r.WY);
+  plot("pWB", [{ x, y: T.map(r => r.P), type: "bar", name: "P", marker: { color: C(1) } },
+    { x, y: T.map(r => r.ET), type: "bar", name: "ET", marker: { color: C(3) } },
+    { x, y: T.map(r => r.Q), type: "bar", name: "Q simulated", marker: { color: C(7) } },
+    { x, y: T.map(r => r.nobs > 300 ? r.Qobs : null), type: "bar", name: "Q observed", marker: { color: css("--ink-3") } }],
+    baseLayout({ barmode: "group", bargap: 0.2, bargroupgap: 0.06, yaxis: ax("mm/yr"), hovermode: "x unified" }));
+  const cols = [["WY", "Water year", 0], ["days", "Days", 0], ["P", "P", 0], ["Snow", "Snow", 0], ["Ei", "Ei", 0], ["Es", "Es (snow)", 0], ["Ea", "Ea", 0], ["ET", "ET", 0], ["PET", "PET", 0],
+    ["Q", "Q sim", 0], ["Qobs", "Q obs", 0], ["Qof", "Overland", 0], ["Qssf", "Stormflow", 0], ["Qie", "Direct + IE", 0], ["Qb", "Baseflow", 0], ["dS", "ΔS", 1], ["closure", "Closure", 6]];
+  $("tblWB").innerHTML = `<thead><tr>${cols.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
+    T.map(r => `<tr>${cols.map(c => `<td>${c[0] === "WY" ? r.WY : c[0] === "closure" ? r.closure.toExponential(1) : fmt(r[c[0]], c[2])}</td>`).join("")}</tr>`).join("") + "</tbody>";
+}
+function plotET() {
+  const o = st.out, D = st.dts;
+  plot("pET", [{ x: D, y: Array.from(o.PET), type: "scatter", mode: "lines", name: "PET", line: { color: css("--ink-3"), width: 1 } },
+    { x: D, y: Array.from(o.ET), type: "scatter", mode: "lines", name: "Actual ET", line: { color: C(3), width: 1.3 } },
+    { x: D, y: Array.from(o.Ei), type: "scatter", mode: "lines", name: "Interception loss", line: { color: C(1), width: 1 } }],
+    baseLayout({ yaxis: ax("mm/d"), xaxis: ax("") }));
+  const mm = new Array(12).fill(0).map(() => ({ PET: 0, Ei: 0, Es: 0, Ea: 0, P: 0, n: 0 }));
+  D.forEach((d, t) => { const m = mm[d.getUTCMonth()]; m.PET += o.PET[t]; m.Ei += o.Ei[t]; m.Es += o.Es[t]; m.Ea += o.Ea[t]; m.P += st.F.P[t]; m.n++; });
+  const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], f = k => mm.map(m => m[k] / m.n * 30.4);
+  plot("pETm", [["P", "P", 1], ["PET", "PET", null], ["Ea", "Transpiration + soil (Ea)", 3], ["Ei", "Rain interception (Ei)", 7], ["Es", "Snow sublimation (Es)", 5]].map(([k, nm, c]) =>
+    ({ x: mon, y: f(k), type: "bar", name: nm, marker: { color: c ? C(c) : css("--ink-3") } })), baseLayout({ barmode: "group", bargap: 0.2, yaxis: ax("Monthly mean, mm/month") }));
+  plot("pLAI", [{ x: D, y: Array.from(o.LAI), type: "scatter", mode: "lines", name: "LAI", line: { color: C(6), width: 1.5 } }], baseLayout({ yaxis: ax("LAI (m²/m²)"), showlegend: false }));
+  ["pET", "pLAI"].forEach(i => { hookSync(i); if (tWin) applyWin(i); });
+}
+function plotSto() {
+  const o = st.out, D = st.dts;
+  plot("pSnow", [{ x: D, y: Array.from(o.SWE), type: "scatter", mode: "lines", name: "Snowpack SWE", line: { color: C(1), width: 1.5 }, fill: "tozeroy", fillcolor: "rgba(42,120,214,0.12)" },
+    { x: D, y: Array.from(o.Csnow), type: "scatter", mode: "lines", name: "Canopy snow", line: { color: C(7), width: 1 } }], baseLayout({ yaxis: ax("mm") }));
+  plot("pSto", [{ x: D, y: Array.from(o.Sbar), type: "scatter", mode: "lines", name: "Mean saturated-zone deficit S̄", line: { color: C(2), width: 1.5 } },
+    { x: D, y: Array.from(o.SRZ), type: "scatter", mode: "lines", name: "Root-zone deficit", line: { color: C(3), width: 1.2 } },
+    { x: D, y: Array.from(o.SUZ), type: "scatter", mode: "lines", name: "Unsaturated-zone storage", line: { color: C(7), width: 1 } }], baseLayout({ yaxis: ax("mm") }));
+  plot("pSat", [{ x: D, y: Array.from(o.satFrac, v => v * 100), type: "scatter", mode: "lines", name: "Saturated area", line: { color: C(1), width: 1.3 }, fill: "tozeroy", fillcolor: "rgba(42,120,214,0.12)" }],
+    baseLayout({ yaxis: ax("% of watershed"), showlegend: false }));
+  ["pSnow", "pSto", "pSat"].forEach(i => { hookSync(i); if (tWin) applyWin(i); });
+}
+function satThreshold(t) {
+  const o = st.out; let thr = o.lambda + (o.Sbar[t] / 1000) / st.p.m;
+  if (o.ssfOn && o.Wssf[t] > 0) thr = Math.min(thr, st.TI.lnLambdaLin + Math.log(st.p.Mssf / (o.Wssf[t] / 1000)));
+  return thr;
+}
+let animRange = [0, 0];
+function buildAnimWin() {
+  const sel = $("animWin"), n = st.dts.length, w = Math.min(st.warm, n - 1), yrs = [];
+  for (let t = w; t < n; t++) { const y = wy(st.dts[t]); if (!yrs.includes(y)) yrs.push(y); }
+  // wettest water year by max saturated fraction
+  let best = yrs[yrs.length - 1], bv = -1; for (let t = w; t < n; t++) if (st.out.satFrac[t] > bv) { bv = st.out.satFrac[t]; best = wy(st.dts[t]); }
+  const prev = sel.value;
+  sel.innerHTML = yrs.map(y => `<option value="${y}">WY${y}${y === best ? " (wettest)" : ""}</option>`).join("") + `<option value="all">Whole period</option>`;
+  sel.value = (prev && [...sel.options].some(o => o.value === prev)) ? prev : String(best);
+  setAnimRange();
+}
+function setAnimRange() {
+  const v = $("animWin").value, n = st.dts.length;
+  if (v === "all") animRange = [Math.min(st.warm, n - 1), n - 1];
+  else { let a = -1, b = -1; st.dts.forEach((d, t) => { if (String(wy(d)) === v) { if (a < 0) a = t; b = t; } }); animRange = [a, b]; }
+  const sl = $("daySlider"); sl.min = animRange[0]; sl.max = animRange[1];
+  { let bt = animRange[0]; for (let t = animRange[0]; t <= animRange[1]; t++) if (st.out.satFrac[t] > st.out.satFrac[bt]) bt = t; sl.value = bt; }
+  drawSatStrip(); drawSatDay(+sl.value);
+}
+function plotSatTI() {
+  if (!plotSatTI.init) { plotSatTI.init = true; $("animWin").value = ""; }
+  buildAnimWin();
+}
+function drawSatStrip() {
+  const [a, b] = animRange, D = st.dts.slice(a, b + 1), o = st.out;
+  plot("pSatStrip", [{ x: D, y: st.F.P.slice(a, b + 1), type: "bar", name: "P (mm/d)", marker: { color: C(1) }, yaxis: "y", hovertemplate: "%{y:.1f} mm" },
+    { x: D, y: Array.from(o.Qsim.slice(a, b + 1)), type: "scatter", mode: "lines", name: "Q sim (mm/d)", line: { color: css("--obs"), width: 1.3 }, xaxis: "x2", yaxis: "y2", hovertemplate: "%{y:.2f}" },
+    { x: D, y: Array.from(o.satFrac.slice(a, b + 1), v => 100 * v), type: "scatter", mode: "lines", name: "Saturated %", line: { color: css("--sat"), width: 1.5 }, fill: "tozeroy", fillcolor: "rgba(31,111,209,0.12)", xaxis: "x3", yaxis: "y3", hovertemplate: "%{y:.1f}%" }],
+    baseLayout({ margin: { l: 58, r: 14, t: 24, b: 24 }, bargap: 0, legend: { orientation: "h", y: 1.18, x: 0 },
+      xaxis: ax("", { anchor: "y", matches: "x3", showticklabels: false }), xaxis2: ax("", { anchor: "y2", matches: "x3", showticklabels: false }), xaxis3: ax("", { anchor: "y3" }),
+      yaxis: ax("P", { domain: [0.72, 1], autorange: "reversed" }), yaxis2: ax("Q", { domain: [0.38, 0.68] }), yaxis3: ax("Sat %", { domain: [0, 0.34], rangemode: "tozero" }),
+      shapes: [satMarker(+$("daySlider").value)] }));
+  const el = $("pSatStrip");
+  if (!el._clk) { el._clk = true; el.on("plotly_click", e => { const d = new Date(e.points[0].x); const t = st.dts.findIndex(x => isoDate(x) === isoDate(d)); if (t >= 0) { $("daySlider").value = t; drawSatDay(t); } }); }
+}
+const satMarker = t => ({ type: "line", xref: "x3", yref: "paper", x0: st.dts[t], x1: st.dts[t], y0: 0, y1: 1, line: { color: css("--va"), width: 2 } });
+const MAPS = {};
+function mapLayer() {
+  if (!MAPS[st.id]) {
+    const m = st.tw.map, dec = b64 => { const s = atob(b64), a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; };
+    MAPS[st.id] = { w: m.w, h: m.h, px: m.px_m, q: dec(m.q), hs: dec(m.hs), P: m.qs.map(v => v / 100) };
+  }
+  return MAPS[st.id];
+}
+const hex = h => { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map(x => x + x).join(""); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+function drawSatMap(cStar) {
+  // cStar: first saturated TWI class; each map pixel holds class quantiles (0, 50, 75, 90, 97, 100th) of its 30 m cells
+  const L = mapLayer(), cv = $("satCanvas"), n = L.w * L.h;
+  if (cv.width !== L.w || cv.height !== L.h) { cv.width = L.w; cv.height = L.h; }
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(L.w, L.h), d = img.data;
+  const lo = hex(css("--hs-lo")), hi = hex(css("--hs-hi")), sc = hex(css("--sat")), x = cStar - 0.5, P = L.P;
+  for (let i = 0; i < n; i++) {
+    const q = 6 * i, h = L.hs[i];
+    if (h === 255) { d[4 * i + 3] = 0; continue; }
+    let f;
+    if (x >= L.q[q + 5]) f = 0; else if (x <= L.q[q]) f = 1;
+    else { let j = 0; while (j < 4 && L.q[q + j + 1] <= x) j++; const a = L.q[q + j], b = L.q[q + j + 1], pa = P[j], pb = P[j + 1]; f = 1 - (b > a ? pa + (pb - pa) * (x - a) / (b - a) : pb); }
+    const s = h / 254;
+    for (let k = 0; k < 3; k++) { const base = lo[k] + (hi[k] - lo[k]) * s; d[4 * i + k] = base + (sc[k] - base) * f; }
+    d[4 * i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const W = L.w * L.px / 1000, nice = [0.5, 1, 2, 5, 10, 20, 50].find(v => v >= W / 6) || 50;
+  $("scaleBar").style.width = (nice / W * cv.clientWidth).toFixed(0) + "px"; $("scaleLbl").textContent = nice < 1 ? nice * 1000 + " m" : nice + " km";
+}
+function drawSatDay(t) {
+  const o = st.out, thr = satThreshold(t), nc = st.TI.val.length;
+  const satCls = st.TI.val.map(v => v >= thr);
+  let cStar = satCls.indexOf(true); if (cStar < 0) cStar = nc;
+  drawSatMap(cStar);
+  $("satDate").textContent = isoDate(st.dts[t]); $("satPct").textContent = (100 * o.satFrac[t]).toFixed(1) + "%";
+  $("dayLbl").textContent = `P ${st.F.P[t].toFixed(1)} mm · Q ${o.Qsim[t].toFixed(2)} mm/d · S̄ ${o.Sbar[t].toFixed(0)} mm · SWE ${o.SWE[t].toFixed(0)} mm`;
+  plot("pSatTI", [{ x: st.TI.val, y: st.TI.frac.map(f => f * 100), type: "bar", marker: { color: satCls.map(s => s ? css("--sat") : css("--terr-hi")) }, hovertemplate: "TI %{x:.2f}: %{y:.2f}% of area<extra></extra>" }],
+    baseLayout({ xaxis: ax("Topographic index ln(a / tan β)"), yaxis: ax("% of area"), bargap: 0.08, hovermode: "closest", margin: { l: 50, r: 10, t: 10, b: 40 },
+      shapes: [{ type: "line", x0: thr, x1: thr, yref: "paper", y0: 0, y1: 1, line: { color: css("--ink"), dash: "dot", width: 1.5 } }],
+      annotations: [{ x: thr, yref: "paper", y: 1, text: "saturation threshold", showarrow: false, xanchor: thr > st.TI.val[Math.floor(nc * 0.6)] ? "right" : "left", xshift: thr > st.TI.val[Math.floor(nc * 0.6)] ? -4 : 4, font: { color: css("--ink-2"), size: 11 } }] }));
+  if ($("pSatStrip").layout) Plotly.relayout("pSatStrip", { shapes: [satMarker(t)] });
+}
+let playTimer = null;
+function plotFit() {
+  const pr = periods(), sets = [["Evaluation", pr.kE], ["Calibration", pr.kC], ["Validation", pr.kV]].map(([n, k]) => [n, metrics(k)]);
+  const rows = [["n (days with obs)", "n", 0], ["Mean Q obs (mm/d)", "mean_obs", 3], ["Mean Q sim (mm/d)", "mean_sim", 3], ["NSE", "NSE", 3], ["NSE log Q", "NSE_log", 3], ["NSE sqrt Q", "NSE_sqrt", 3], ["KGE", "KGE", 3],
+    ["KGE r (correlation)", "KGE_r", 3], ["KGE α (variability)", "KGE_alpha", 3], ["KGE β (bias ratio)", "KGE_beta", 3], ["PBIAS (%)", "PBIAS", 1], ["RMSE (mm/d)", "RMSE", 3], ["MAE (mm/d)", "MAE", 3], ["R²", "R2", 3]];
+  $("tblPerf").innerHTML = `<thead><tr><th>Metric</th>${sets.map(s => `<th>${s[0]}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map(r => `<tr><td class="txt">${r[0]}</td>${sets.map(s => `<td>${s[1] ? fmt(s[1][r[1]], r[2]) : "–"}</td>`).join("")}</tr>`).join("") + "</tbody>";
+  const kC = withObs(pr.kC), kV = withObs(pr.kV), lo = 1e-3;
+  const xy = k => ({ x: k.map(t => Math.max(st.obs[t], lo)), y: k.map(t => Math.max(st.out.Qsim[t], lo)) });
+  let mx = lo; for (const t of pr.kE) { if (st.obs[t] !== null) mx = Math.max(mx, st.obs[t]); mx = Math.max(mx, st.out.Qsim[t]); }
+  plot("pScatter", [{ ...xy(kC), type: "scattergl", mode: "markers", name: "Calibration", marker: { color: C(1), size: 4, opacity: 0.5 } },
+    { ...xy(kV), type: "scattergl", mode: "markers", name: "Validation", marker: { color: C(2), size: 4, opacity: 0.5 } },
+    { x: [lo, mx], y: [lo, mx], type: "scatter", mode: "lines", name: "1:1", line: { color: css("--ink-3"), dash: "dot", width: 1 }, hoverinfo: "skip" }],
+    baseLayout({ xaxis: ax("Observed Q (mm/d)", { type: "log" }), yaxis: ax("Simulated Q (mm/d)", { type: "log" }), hovermode: "closest" }));
+  const o = st.out, k = pr.kE, nyr = k.length / 365.25, s = a => k.reduce((x, t) => x + a[t], 0), sQ = Math.max(s(o.Qtot), 1e-12);
+  $("runSummary").textContent = `Evaluation ${isoDate(st.dts[k[0]])} to ${isoDate(st.dts[st.dts.length - 1])} (after ${pr.w}-day warm-up). Run took ${st.runMs.toFixed(0)} ms. λ = ${o.lambda.toFixed(2)}.
+P ${s(st.F.P) / nyr | 0}  ET ${s(o.ET) / nyr | 0}  Q ${s(o.Qsim) / nyr | 0}  PET ${s(o.PET) / nyr | 0} mm/yr
+Interception loss ${(s(o.Ei) + s(o.Es)) / nyr | 0} mm/yr (${(100 * (s(o.Ei) + s(o.Es)) / s(st.F.P)).toFixed(0)}% of P; snow ${s(o.Es) / nyr | 0})
+Share of Q: overland ${(100 * s(o.Qof) / sQ).toFixed(0)}%, stormflow ${(100 * s(o.Qssf) / sQ).toFixed(0)}%, direct ${(100 * s(o.Qimp) / sQ).toFixed(0)}%, infiltration excess ${(100 * s(o.Qie) / sQ).toFixed(0)}%, baseflow ${(100 * s(o.Qb) / sQ).toFixed(0)}%`;
+}
+
+// ------------------------------------------------------------------ calibration
+const calState = { worker: null, result: null, trace: [], loopX: [] };
+const DEFAULT_CAL = new Set(S.CAL_KEYS);
+function buildCalTable() {
+  const ina = new Set(inactiveKeys()), prev = {};
+  document.querySelectorAll("#calTbl tr[data-k]").forEach(tr => prev[tr.dataset.k] = { on: tr.querySelector(".con").checked, lo: tr.querySelector(".cmin").value, hi: tr.querySelector(".cmax").value });
+  let h = `<thead><tr><th></th><th>Param.</th><th>Min</th><th>Max</th><th>Current</th></tr></thead><tbody>`;
+  for (const r of S.PARAMS) {
+    if (ina.has(r.key) || r.key === "albSnow") continue;
+    const pv = prev[r.key], on = pv ? pv.on : (DEFAULT_CAL.has(r.key) || (r.key === "Ks" && st.p.ieOn) || (["Mssf", "kssf", "kv"].includes(r.key) && st.p.ssfOn));
+    h += `<tr data-k="${r.key}"><td><input type="checkbox" class="con" ${on ? "checked" : ""} aria-label="Calibrate ${r.key}"></td><td class="txt mono">${r.key}</td>
+      <td><input type="number" class="cmin" step="any" value="${pv ? pv.lo : r.min}"></td><td><input type="number" class="cmax" step="any" value="${pv ? pv.hi : r.max}"></td><td>${sig(st.p[r.key])}</td></tr>`;
+  }
+  $("calTbl").innerHTML = h + "</tbody>";
+}
+function calSelection() {
+  const keys = [], lo = [], hi = [];
+  document.querySelectorAll("#calTbl tr[data-k]").forEach(tr => { if (tr.querySelector(".con").checked) { keys.push(tr.dataset.k); lo.push(+tr.querySelector(".cmin").value); hi.push(+tr.querySelector(".cmax").value); } });
+  return { keys, lo, hi };
+}
+const WORKER_SRC = `
+self.onmessage = function (e) {
+  const J = e.data, TM = self.TM;
+  const pIdx = J.kC;
+  const obs = pIdx.map(t => J.obs[t]);
+  let nev = 0, best = -Infinity, trace = [], lastPost = 0;
+  const toP = x => { const p = Object.assign({}, J.p); J.keys.forEach((k, i) => p[k] = J.islog[i] ? Math.pow(10, x[i]) : x[i]); return p; };
+  const fun = x => {
+    const q = TM.core(J.F, J.TI, toP(x), J.R).Qsim;
+    let v = TM.objective(J.obj, obs, pIdx.map(t => q[t]));
+    if (!Number.isFinite(v)) v = -1e6;
+    nev++;
+    if (v > best) { best = v; trace.push([nev, v]); }
+    if (nev - lastPost >= 25) { lastPost = nev; self.postMessage({ type: "prog", nev, best, trace }); }
+    return 1 - v;
+  };
+  const r = TM.sceua(fun, J.x0, J.bl, J.bu, Object.assign({}, J.opts, { outFcn: s => { self.postMessage({ type: "loop", nev: s.nevals, best: 1 - s.bestf, bestx: s.bestx, loop: s.loop, trace }); return false; } }));
+  self.postMessage({ type: "done", r, trace, nev });
+};`;
+function startCal() {
+  const sel = calSelection();
+  if (!sel.keys.length) { $("calMsg").textContent = "Tick at least one parameter."; return; }
+  const bad = sel.keys.filter((k, i) => !(sel.lo[i] < sel.hi[i])); if (bad.length) { $("calMsg").textContent = "Min must be below Max for: " + bad.join(", "); return; }
+  run(); const pr = periods(), kC = withObs(pr.kC);
+  if (kC.length < 30) { $("calMsg").textContent = "Calibration needs at least 30 days of observed discharge in the calibration period."; return; }
+  const islog = sel.keys.map((k, i) => S.PBYKEY[k].isLog && sel.lo[i] > 0);
+  const bl = sel.lo.map((v, i) => islog[i] ? Math.log10(v) : v), bu = sel.hi.map((v, i) => islog[i] ? Math.log10(v) : v);
+  const x0 = sel.keys.map((k, i) => { const v = Math.min(Math.max(st.p[k], sel.lo[i]), sel.hi[i]); return islog[i] ? Math.log10(v) : v; });
+  const obj = $("obj").value, opts = { ngs: +$("ngs").value, maxn: +$("maxn").value, kstop: +$("kstop").value, pcento: +$("pcento").value, peps: 1e-3, seed: +$("seed").value, includeX0: true };
+  const src = $("modelsrc").textContent + WORKER_SRC;
+  const w = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+  calState.worker = w; calState.keys = sel.keys; calState.islog = islog; calState.lo = sel.lo; calState.hi = sel.hi; calState.obj = obj; calState.maxn = opts.maxn; calState.t0 = performance.now(); calState.last = null;
+  $("btnCal").disabled = true; $("btnCalStop").disabled = false; $("calMsg").textContent = "Starting…";
+  w.onmessage = e => {
+    const m = e.data;
+    if (m.type === "prog" || m.type === "loop") {
+      $("calBar").style.width = Math.min(100, 100 * m.nev / opts.maxn) + "%";
+      const sec = (performance.now() - calState.t0) / 1000, left = sec / m.nev * (opts.maxn - m.nev);
+      $("calMsg").textContent = `Run ${m.nev} of max ${opts.maxn} · best ${obj} = ${m.best.toFixed(4)} · ${sec.toFixed(0)} s elapsed, ≤ ${left.toFixed(0)} s left`;
+      if (m.type === "loop") calState.last = { bestx: m.bestx, best: m.best, nev: m.nev, message: "stopped by the user" };
+      calState.trace = m.trace; drawCalTrace(m.trace);
+    } else if (m.type === "done") { calState.trace = m.trace; finishCal({ bestx: m.r.bestx, best: 1 - m.r.bestf, nev: m.r.nevals, message: m.r.message }, m.trace); }
+  };
+  w.onerror = e => { $("calMsg").textContent = "Calibration failed: " + e.message; stopWorker(); };
+  w.postMessage({ F: currentForcing(), TI: st.TI, p: st.p, R: routing(), keys: sel.keys, islog, bl, bu, x0, kC, obs: st.obs, obj, opts });
+}
+function stopWorker() { if (calState.worker) calState.worker.terminate(); calState.worker = null; $("btnCal").disabled = false; $("btnCalStop").disabled = true; }
+function finishCal(r, trace) {
+  stopWorker();
+  const params = {}; calState.keys.forEach((k, i) => params[k] = +(calState.islog[i] ? Math.pow(10, r.bestx[i]) : r.bestx[i]).toPrecision(4));
+  calState.result = { params, best: r.best, nev: r.nev };
+  const sec = (performance.now() - calState.t0) / 1000;
+  $("calMsg").textContent = `${calState.obj} = ${r.best.toFixed(4)} after ${r.nev} runs (${sec.toFixed(0)} s): ${r.message}.`;
+  $("calBar").style.width = "100%"; $("btnCalApply").disabled = false;
+  if (trace) drawCalTrace(trace);
+  if ($("calAuto").checked) applyBest(); else renderCalRes();
+}
+function applyBest() {
+  const r = calState.result; if (!r) return;
+  Object.assign(st.p, r.params); markEdited(); refreshParams(); run(); buildCalTable(); renderCalRes();
+  $("calMsg").textContent += " Applied the best parameters."; if (st.scen) runScenario(true);
+}
+function drawCalTrace(trace) {
+  if (!trace || !trace.length) return;
+  plot("pCal", [{ x: trace.map(t => t[0]), y: trace.map(t => t[1]), type: "scatter", mode: "lines+markers", line: { shape: "hv", color: C(1), width: 2 }, marker: { size: 6, color: C(1) }, name: "Best so far" }],
+    baseLayout({ xaxis: ax("Model runs"), yaxis: ax("Best " + (calState.obj || "objective")), hovermode: "closest", showlegend: false }));
+}
+function renderCalRes() {
+  const r = calState.result;
+  if (r) $("calRes").innerHTML = `<thead><tr><th>Parameter</th><th>Min</th><th>Max</th><th>Best</th><th>Current</th></tr></thead><tbody>` +
+    calState.keys.map((k, i) => `<tr><td class="txt">${S.PBYKEY[k].label}</td><td>${sig(calState.lo[i])}</td><td>${sig(calState.hi[i])}</td><td>${sig(r.params[k])}</td><td>${sig(st.p[k])}</td></tr>`).join("") + "</tbody>";
+  renderCalFit();
+}
+function renderCalFit() {
+  if (!st.out) return;
+  const D = st.dts;
+  plot("pCalHyd", [{ x: D, y: st.obs, type: "scatter", mode: "lines", name: "Observed", line: { color: css("--obs"), width: 1.2 } },
+    { x: D, y: Array.from(st.out.Qsim), type: "scatter", mode: "lines", name: "Simulated", line: { color: C(1), width: 1.4 } }],
+    baseLayout({ yaxis: ax("Q (mm/d)", { type: "log" }), shapes: [{ type: "rect", xref: "x", yref: "paper", x0: st.calStart, x1: st.calEnd, y0: 0, y1: 1, fillcolor: css("--accent-soft"), opacity: 0.5, line: { width: 0 }, layer: "below" }],
+      annotations: [{ x: st.calStart, xref: "x", yref: "paper", y: 1, text: "calibration period", showarrow: false, xanchor: "left", yanchor: "top", font: { size: 11, color: css("--ink-2") } }] }));
+  hookSync("pCalHyd");
+  const pr = periods(), sets = [["Calibration", metrics(pr.kC)], ["Validation", metrics(pr.kV)]];
+  const rows = [["KGE", "KGE", 3], ["NSE", "NSE", 3], ["NSE log Q", "NSE_log", 3], ["PBIAS (%)", "PBIAS", 1], ["n days", "n", 0]];
+  $("tblPerfCal").innerHTML = `<thead><tr><th>Metric</th>${sets.map(s => `<th>${s[0]}</th>`).join("")}</tr></thead><tbody>` +
+    rows.map(r => `<tr><td class="txt">${r[0]}</td>${sets.map(s => `<td>${s[1] ? fmt(s[1][r[1]], r[2]) : "–"}</td>`).join("")}</tr>`).join("") + "</tbody>";
+}
+
+// ------------------------------------------------------------------ land-use scenarios (presets from model_utils.R)
+const NA = NaN;
+const LU_STATE = {
+  baseline: [0, 1, NA, NA, NA, NA, NA, NA, NA, NA, 1, NA, 0, NA],
+  pasture: [1, NA, 2.5, 0.6, 100, 290, 30, 0.4, 0.20, 4.5, 0.5, 0, 0.1, 15],
+  crop: [1, NA, 4.5, 0.1, 135, 270, 30, 1.5, 0.20, 4.5, 0.6, 0, 0.15, 8],
+  shrub: [1, NA, 2.5, 0.8, 110, 290, 25, 2, 0.17, 3.5, 0.7, 0, 0, 50],
+  lawn: [1, NA, 2.5, 0.6, 110, 290, 25, 4, 0.18, 4, 0.4, 0, 0.3, 10],
+  cut: [0, 0.2, NA, NA, NA, NA, NA, 1, 0.19, 5, 0.5, 0, 0.1, 5],
+  pine: [1, NA, 6, 4.5, 100, 300, 30, 18, 0.11, 2.5, 1, 1, 0, 25],
+  dead: [0, 0.4, NA, NA, NA, NA, NA, NA, NA, NA, 0.8, 0, 0, 25],
+  fireLow: [0, 0.7, NA, NA, NA, NA, NA, NA, 0.10, NA, 0.9, NA, 0.1, 20],
+  fireMod: [0, 0.35, NA, NA, NA, NA, NA, NA, 0.09, 4, 0.6, 0, 0.3, 5],
+  fireHigh: [0, 0.05, NA, NA, NA, NA, NA, 5, 0.08, 5, 0.4, 0, 0.6, 2],
+};
+const LU_ROWS = ["LAI mode (0 = factor × baseline, 1 = seasonal curve)", "LAI factor (mode 0)", "LAI max (mode 1)", "LAI min (mode 1)", "Leaf-on day of year (mode 1)",
+  "Leaf-off day of year (mode 1)", "Leaf ramp (days, mode 1)", "Canopy height (m)", "Snow-free albedo", "Degree-day factor (mm/°C/d)", "Root-zone capacity (× Srmax)",
+  "Evergreen fraction fEv", "Compacted / water-repellent share", "Infiltration capacity of that share (mm/h)"];
+function lucPreset(name) {
+  const B = LU_STATE.baseline.slice(), P = { start: B.slice(), final: B.slice(), pre: "baseline", curve: "exponential", T: 8, compRec: 5, imp: 0, build: 5, conn: 0.6, det: false, years: 0, sev: 0.7, where: "whole", note: "" };
+  switch (name) {
+    case "Forest harvest (clearcut)": P.start = LU_STATE.cut.slice();
+      P.note = "Clearcut: LAI 20% of the forest, 1 m canopy, half the root zone, open-snow melt; regrows to the forest (95% after 8 years). Skid trails: 10% compacted (5 mm/h)."; break;
+    case "Urban / suburban development": P.start = LU_STATE.lawn.slice(); P.final = P.start.slice(); P.curve = "step"; P.T = 1; P.compRec = Infinity; P.imp = 0.35; P.where = "pct";
+      P.note = "Development: 35% new impervious surface built over 5 years (60% connected); the rest becomes lawns and yard trees on compacted soil. Tick detention for stormwater ponds."; break;
+    case "Afforestation (pasture to forest)": P.pre = "pasture"; P.start = LU_STATE.pasture.slice(); P.start[12] = 0; P.final = B.slice(); P.T = 25; P.compRec = 3; P.where = "pct";
+      P.note = "Pasture (also in the baseline) planted to forest: grazing stops and the stand grows to the forest canopy (95% after 25 years)."; break;
+    case "Conifer conversion (hardwood to pine)": P.start = LU_STATE.cut.slice(); P.final = LU_STATE.pine.slice(); P.T = 20;
+      P.note = "Hardwoods cut and planted to pine: evergreen LAI 4.5–6, darker albedo, snow interception all winter (95% grown after 20 years)."; break;
+    case "Insect defoliation": P.curve = "none"; P.compRec = Infinity; P.years = 2; P.sev = 0.7;
+      P.note = "Defoliation: 70% of the LAI lost from day 152 to 196 in 2 outbreak years. Combine with mortality by editing the End column."; break;
+    case "Tree mortality (pests, disease)": P.final = LU_STATE.dead.slice(); P.curve = "linear"; P.T = 6; P.compRec = Infinity;
+      P.note = "Gradual mortality: LAI falls to 40% over 6 years; evergreen foliage lost (e.g. hemlock woolly adelgid, set fEv End = 0) and roots reduced."; break;
+    case "Wildfire, low severity": P.start = LU_STATE.fireLow.slice(); P.T = 4; P.compRec = 1; P.note = "Low-severity fire: 30% canopy loss, charred surface, little water repellency."; break;
+    case "Wildfire, moderate severity": P.start = LU_STATE.fireMod.slice(); P.T = 6; P.compRec = 2; P.note = "Moderate-severity fire: 65% canopy loss, darker surface, 30% water-repellent soil (5 mm/h) recovering over 2 years."; break;
+    case "Wildfire, high severity": P.start = LU_STATE.fireHigh.slice(); P.T = 10; P.compRec = 3; P.note = "High-severity fire: canopy killed, 60% water-repellent soil (2 mm/h) recovering over 3 years; vegetation recovers over 10 years."; break;
+    case "Conversion to cropland": P.start = LU_STATE.crop.slice(); P.final = P.start.slice(); P.curve = "step"; P.T = 1; P.compRec = Infinity;
+      P.note = "Cropland: crop LAI up to 4.5 between planting (day 135) and harvest (day 270), bare soil otherwise; 15% traffic-compacted soil."; break;
+    case "Conversion to pasture": P.start = LU_STATE.pasture.slice(); P.final = P.start.slice(); P.curve = "step"; P.T = 1; P.compRec = Infinity;
+      P.note = "Pasture: grass LAI 0.6–2.5, 0.4 m canopy, 10% compacted by grazing."; break;
+    default: P.note = "Custom: edit the land-use state table below.";
+  }
+  return P;
+}
+const LU_PRESETS = ["Forest harvest (clearcut)", "Urban / suburban development", "Afforestation (pasture to forest)", "Conifer conversion (hardwood to pine)", "Insect defoliation",
+  "Tree mortality (pests, disease)", "Wildfire, low severity", "Wildfire, moderate severity", "Wildfire, high severity", "Conversion to cropland", "Conversion to pasture", "Custom (edit the table)"];
+let LUTBL = null;
+function setPreset(name) {
+  const P = lucPreset(name);
+  LUTBL = [LU_STATE[P.pre].slice(), P.start, P.final];
+  $("luNote").textContent = P.note; $("luCurve").value = P.curve; $("luRecY").value = P.T; $("luCompRec").value = Number.isFinite(P.compRec) ? P.compRec : "";
+  $("luImp").value = P.imp; $("luBuild").value = P.build; $("luConn").value = P.conn; $("luDet").checked = P.det; $("luYrs").value = P.years; $("luSev").value = P.sev;
+  $("luPre").value = P.pre; $("luWhere").value = P.where; whereUI(); drawLuTable();
+}
+function drawLuTable() {
+  const v = x => Number.isNaN(x) ? "" : x;
+  $("luTbl").innerHTML = `<thead><tr><th>Property</th><th>Before</th><th>Start</th><th>End</th></tr></thead><tbody>` +
+    LU_ROWS.map((r, i) => `<tr><td class="txt">${r}</td>${[0, 1, 2].map(j => `<td><input type="number" step="any" data-i="${i}" data-j="${j}" value="${v(LUTBL[j][i])}" aria-label="${r}"></td>`).join("")}</tr>`).join("") + "</tbody>";
+  $("luTbl").querySelectorAll("input").forEach(inp => inp.onchange = () => { const x = inp.value === "" ? NaN : +inp.value; LUTBL[+inp.dataset.j][+inp.dataset.i] = x; });
+}
+function whereUI() { const w = $("luWhere").value; $("luPctF").hidden = !(w === "pct" || w === "dry"); $("luBufF").hidden = w !== "rip"; updateArea(); }
+function changedH() {
+  const w = $("luWhere").value, nc = st.TI.val.length, af = st.TI.frac, h = new Array(nc).fill(0);
+  const fill = (order, target) => { let acc = 0; for (const c of order) { const take = Math.min(af[c], Math.max(target - acc, 0)); h[c] = af[c] > 0 ? take / af[c] : 0; acc += take; } };
+  const pct = Math.min(Math.max(+$("luPct").value || 0, 0), 100) / 100, buf = Math.min(Math.max(+$("luBuf").value || 0, 0), 100) / 100;
+  const asc = [...Array(nc).keys()].sort((a, b) => st.TI.val[a] - st.TI.val[b]);
+  if (w === "whole") h.fill(1);
+  else if (w === "pct") h.fill(pct);
+  else if (w === "dry") fill(asc, pct);
+  else fill(asc, 1 - buf);
+  return h;
+}
+function updateArea() {
+  if (!st.TI) return;
+  const h = changedH(), a = h.reduce((s, v, i) => s + v * st.TI.frac[i], 0);
+  $("luArea").textContent = `Changed: ${(100 * a).toFixed(0)}% of the watershed (${(a * st.b.area_km2).toFixed(1)} km²), placed by topographic-index class.`;
+}
+function buildLuc(F, dts) {
+  const tH = new Date($("luDate").value + "T00:00:00Z"), t0 = dts[0];
+  const curve = $("luCurve").value, compRec = $("luCompRec").value === "" ? Infinity : +$("luCompRec").value;
+  const lu = { on: true, change: true, h: changedH(), tIdx: Math.round((tH - t0) / 864e5) + 1, pre: LUTBL[0], start: LUTBL[1], final: LUTBL[2], curve,
+    Tdays: 365.25 * +$("luRecY").value, compRecDays: 365.25 * compRec, impFrac: +$("luImp").value, impRampDays: 365.25 * +$("luBuild").value,
+    impConn: +$("luConn").value, impSdep: st.p.Sdep, detention: $("luDet").checked, kdet: +$("luKdet").value };
+  const yrs = +$("luYrs").value, sev = +$("luSev").value;
+  if (yrs > 0 && sev > 0) {
+    const yH = tH.getUTCFullYear(), d1 = +$("luD1").value, d2 = +$("luD2").value;
+    lu.laiMult = dts.map((d, t) => { const y = d.getUTCFullYear(), dy = F.doy[t]; return (y >= yH && y < yH + yrs && dy >= d1 && dy <= d2 && d >= tH) ? 1 - sev : 1; });
+  }
+  const preIsBase = LUTBL[0].every((v, i) => (Number.isNaN(v) && Number.isNaN(LU_STATE.baseline[i])) || v === LU_STATE.baseline[i]);
+  return { lu, preIsBase, tH };
+}
+function clearScen() { st.scen = null; ["pScen", "pScenAnn", "pScenFdc"].forEach(i => Plotly.purge(i)); $("scenKpis").innerHTML = ""; $("tblScen").innerHTML = ""; $("scenMsg").textContent = "Choose a scenario and press Run."; }
+function runScenario(quiet) {
+  if (!st.out) run();
+  const F = currentForcing(), R = routing(), dts = st.dts, { lu, preIsBase, tH } = buildLuc(F, dts);
+  if (lu.tIdx < 1 || lu.tIdx > dts.length) { $("scenMsg").textContent = "The date of change must fall inside the simulation period."; return; }
+  const t0 = performance.now();
+  const pS = Object.assign({}, st.p, { luc: lu }), sc = TM.core(F, st.TI, pS, R);
+  const base = preIsBase ? st.out : TM.core(F, st.TI, Object.assign({}, st.p, { luc: Object.assign({}, lu, { change: false, laiMult: null }) }), R);
+  st.scen = { sc, base, tIdx: lu.tIdx - 1, tH, frac: sc.lucFrac };
+  $("scenMsg").textContent = `Ran baseline and scenario in ${(performance.now() - t0).toFixed(0)} ms. Changed tile: ${(100 * sc.lucFrac).toFixed(0)}% of the watershed.` + (preIsBase ? "" : " The baseline also uses the land use before the change on that area.");
+  renderScenario();
+}
+function renderScenario() {
+  const { sc, base, tIdx } = st.scen, D = st.dts, n = D.length, w = Math.max(tIdx, Math.min(st.warm, n - 1)), k = []; for (let t = w; t < n; t++) k.push(t);
+  const nyr = k.length / 365.25, s = (a, kk = k) => kk.reduce((x, t) => x + a[t], 0) / nyr;
+  const q95 = a => { const v = k.map(t => a[t]).sort((x, y) => x - y); return v[Math.floor(0.05 * v.length)]; };
+  const pk = a => { let m = 0; for (const t of k) m = Math.max(m, a[t]); return m; };
+  const dQ = s(sc.Qsim) - s(base.Qsim), dET = s(sc.ET) - s(base.ET), pc = (a, b) => b > 0 ? ` (${a >= b ? "+" : ""}${(100 * (a - b) / b).toFixed(0)}%)` : "";
+  const sgn = v => (v >= 0 ? "+" : "") + v.toFixed(0);
+  $("scenKpis").innerHTML = kpiTile("Δ Streamflow", sgn(dQ), `mm/yr after the change${pc(s(sc.Qsim), s(base.Qsim))}`) + kpiTile("Δ ET", sgn(dET), `mm/yr${pc(s(sc.ET), s(base.ET))}`) +
+    kpiTile("Peak daily Q", fmt(pk(sc.Qsim), 1), `mm/d · baseline ${fmt(pk(base.Qsim), 1)}`) + kpiTile("Low flow Q95", fmt(q95(sc.Qsim), 3), `mm/d · baseline ${fmt(q95(base.Qsim), 3)}`) +
+    kpiTile("Changed area", `${(100 * st.scen.frac).toFixed(0)}%`, `${(st.scen.frac * st.b.area_km2).toFixed(1)} km² from ${isoDate(st.scen.tH)}`);
+  plot("pScen", [{ x: D, y: st.obs, type: "scatter", mode: "lines", name: "Observed", line: { color: css("--ink-3"), width: 1 }, visible: "legendonly" },
+    { x: D, y: Array.from(base.Qsim), type: "scatter", mode: "lines", name: "Baseline", line: { color: C(1), width: 1.3 } },
+    { x: D, y: Array.from(sc.Qsim), type: "scatter", mode: "lines", name: "Scenario", line: { color: C(2), width: 1.3 } }],
+    baseLayout({ yaxis: ax("Q (mm/d)", { type: "log" }), shapes: [{ type: "line", x0: st.scen.tH, x1: st.scen.tH, yref: "paper", y0: 0, y1: 1, line: { color: css("--ink"), dash: "dot", width: 1.5 } }],
+      annotations: [{ x: st.scen.tH, yref: "paper", y: 1, text: "change", showarrow: false, xanchor: "left", xshift: 4, yanchor: "top", font: { size: 11, color: css("--ink-2") } }] }));
+  hookSync("pScen");
+  // annual
+  const rows = new Map();
+  for (let t = Math.min(st.warm, n - 1); t < n; t++) { const y = wy(D[t]); if (!rows.has(y)) rows.set(y, { WY: y, Pb: 0, Qb: 0, Qs: 0, Eb: 0, Es: 0, Pkb: 0, Pks: 0 }); const r = rows.get(y);
+    r.Pb += st.F.P[t]; r.Qb += base.Qsim[t]; r.Qs += sc.Qsim[t]; r.Eb += base.ET[t]; r.Es += sc.ET[t]; r.Pkb = Math.max(r.Pkb, base.Qsim[t]); r.Pks = Math.max(r.Pks, sc.Qsim[t]); }
+  const T = [...rows.values()], x = T.map(r => "WY" + r.WY), yC = wy(st.scen.tH);
+  plot("pScenAnn", [{ x, y: T.map(r => r.Qs - r.Qb), type: "bar", name: "Δ Streamflow", marker: { color: C(1) } }, { x, y: T.map(r => r.Es - r.Eb), type: "bar", name: "Δ ET", marker: { color: C(3) } }],
+    baseLayout({ barmode: "group", bargap: 0.25, yaxis: ax("mm/yr", { zeroline: true, zerolinecolor: css("--ink-3") }) }));
+  const ex = a => { const v = k.map(t => a[t]).sort((p, q) => q - p); return { x: v.map((_, i) => 100 * (i + 1) / (v.length + 1)), y: v }; };
+  plot("pScenFdc", [{ ...ex(base.Qsim), type: "scatter", mode: "lines", name: "Baseline", line: { color: C(1), width: 2 } }, { ...ex(sc.Qsim), type: "scatter", mode: "lines", name: "Scenario", line: { color: C(2), width: 2 } }],
+    baseLayout({ xaxis: ax("Exceedance probability (%)"), yaxis: ax("Q (mm/d)", { type: "log" }), hovermode: "closest" }));
+  st.scen.table = T;
+  $("tblScen").innerHTML = `<thead><tr><th>Water year</th><th>P</th><th>Q baseline</th><th>Q scenario</th><th>ΔQ</th><th>ET baseline</th><th>ET scenario</th><th>ΔET</th><th>Peak Q base</th><th>Peak Q scen</th></tr></thead><tbody>` +
+    T.map(r => `<tr${r.WY === yC ? ' style="font-weight:600"' : ""}><td>${r.WY}</td><td>${fmt(r.Pb, 0)}</td><td>${fmt(r.Qb, 0)}</td><td>${fmt(r.Qs, 0)}</td><td>${sgn(r.Qs - r.Qb)}</td><td>${fmt(r.Eb, 0)}</td><td>${fmt(r.Es, 0)}</td><td>${sgn(r.Es - r.Eb)}</td><td>${fmt(r.Pkb, 1)}</td><td>${fmt(r.Pks, 1)}</td></tr>`).join("") + "</tbody>";
+}
+
+// ------------------------------------------------------------------ export
+function dailyCsv() {
+  const o = st.out, cols = ["P", "rain", "snow", "melt", "SWE", "PET", "Ewet", "Ei", "Es", "Ea", "ET", "LAI", "Qof", "Qb", "Qssf", "Qie", "Qimp", "Qtot", "Qsim", "Sbar", "SRZ", "SUZ", "satFrac", "albedo"];
+  const lines = ["Date,Qobs," + cols.join(",")];
+  for (let t = 0; t < st.dts.length; t++) lines.push([isoDate(st.dts[t]), st.obs[t] === null ? "" : st.obs[t], ...cols.map(c => (c === "P" ? st.F.P[t] : o[c][t]).toPrecision(6))].join(","));
+  return `# TOPMODEL Watershed Explorer, USGS ${st.id} ${st.b.name}; units mm/d or mm (Sbar, SRZ, SUZ deficits/storage), satFrac 0-1\n` + lines.join("\n");
+}
+async function copyText(txt, what) {
+  try { await navigator.clipboard.writeText(txt); toast(`Copied ${what}.`); }
+  catch (e) { const ta = $("copyFallback"); ta.hidden = false; ta.value = txt; ta.focus(); ta.select(); toast("Copy was blocked here; the text is selected below, press Ctrl/Cmd+C."); }
+}
+
+// ------------------------------------------------------------------ wiring
+function showPage(p) {
+  stopPlay();
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.page === p));
+  document.querySelectorAll(".page").forEach(s => s.hidden = s.id !== "pg-" + p);
+  if (p === "data") renderData();
+  if (p === "model") renderTab();
+  if (p === "calibrate") { buildCalTable(); renderCalFit(); if (calState.result) renderCalRes(); }
+  if (p === "scenario") { updateArea(); if (st.scen) renderScenario(); }
+  try { localStorage.setItem("tmx-page", p); } catch (e) {}
+  window.dispatchEvent(new Event("resize"));
+}
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => showPage(b.dataset.page));
+document.querySelectorAll("#mtabs button").forEach(b => b.onclick = () => {
+  curTab = b.dataset.t; stopPlay();
+  document.querySelectorAll("#mtabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("#pg-model [data-v]").forEach(v => v.hidden = v.dataset.v !== curTab);
+  renderTab(); window.dispatchEvent(new Event("resize"));
+});
+$("btnRun").onclick = () => { run(); if (st.scen) runScenario(true); toast(`Ran ${st.dts.length} days in ${st.runMs.toFixed(0)} ms.`); };
+$("btnReset").onclick = () => applyParamSet("start");
+$("btnStartSet").onclick = () => applyParamSet("start");
+$("btnPreSet").onclick = () => applyParamSet("pre");
+$("cbSSF").onchange = e => { st.p.ssfOn = e.target.checked; markEdited(); refreshParams(); buildCalTable(); autoRun(); };
+$("cbIE").onchange = e => { st.p.ieOn = e.target.checked; markEdited(); refreshParams(); buildCalTable(); autoRun(); };
+$("cbImp").onchange = e => { st.p.impOn = e.target.checked; if (e.target.checked && st.p.impPct <= 0) { st.p.impPct = 5; toast("Impervious area was 0%; set to 5%. Adjust it under Impervious area."); } markEdited(); refreshParams(); buildCalTable(); autoRun(); };
+$("cbRoute").onchange = e => { st.route = e.target.checked; refreshParams(); buildCalTable(); autoRun(); };
+["cbLog", "cbComp", "cbFdc"].forEach(i => $(i).onchange = plotHyd);
+$("daySlider").oninput = e => drawSatDay(+e.target.value);
+function stopPlay() { if (playTimer) { clearTimeout(playTimer); playTimer = null; $("btnPlay").textContent = "Play"; } }
+$("btnPlay").onclick = () => {
+  if (playTimer) { stopPlay(); return; }
+  $("btnPlay").textContent = "Pause";
+  const step = () => { const sl = $("daySlider"); let v = +sl.value + 1; if (v > animRange[1]) v = animRange[0]; sl.value = v; drawSatDay(v); playTimer = setTimeout(step, +$("animSpeed").value); };
+  step();
+};
+$("animWin").onchange = () => { stopPlay(); setAnimRange(); };
+function periodChanged() {
+  const a = new Date($("simStart").value + "T00:00:00Z"), b = new Date($("simEnd").value + "T00:00:00Z");
+  const i0 = Math.round((a - st.D[0]) / 864e5), i1 = Math.round((b - st.D[0]) / 864e5);
+  if (!(i0 >= 0 && i1 < st.D.length && i1 - i0 > 30)) { toast("Choose a period of more than 30 days inside Oct 2004 – Sep 2014."); $("simStart").value = isoDate(st.D[st.i0]); $("simEnd").value = isoDate(st.D[st.i1]); return; }
+  st.i0 = i0; st.i1 = i1; setCalDefaults(); run(); renderData(); if (st.scen) runScenario(true);
+}
+$("simStart").onchange = periodChanged; $("simEnd").onchange = periodChanged;
+$("warm").onchange = () => { st.warm = Math.max(0, +$("warm").value || 0); setCalDefaults(); renderModel(); };
+$("pMult").onchange = () => { st.pMult = Math.min(Math.max(+$("pMult").value || 1, 0.5), 2); $("pMult").value = st.pMult; run(); renderData(); };
+$("calStart").onchange = $("calEnd").onchange = () => { st.calStart = new Date($("calStart").value + "T00:00:00Z"); st.calEnd = new Date($("calEnd").value + "T00:00:00Z"); renderCalFit(); renderModel(); };
+$("btnCal").onclick = startCal;
+$("btnCalStop").onclick = () => { const l = calState.last; if (l) finishCal(l); else { stopWorker(); $("calMsg").textContent = "Stopped before the first shuffle finished; nothing to apply."; } };
+$("btnCalApply").onclick = applyBest;
+$("btnCalReset").onclick = () => { $("calTbl").innerHTML = ""; buildCalTable(); };
+$("luPreset").innerHTML = LU_PRESETS.map(p => `<option>${p}</option>`).join("");
+$("luPreset").onchange = e => setPreset(e.target.value);
+$("luPre").onchange = e => { LUTBL[0] = LU_STATE[e.target.value].slice(); drawLuTable(); };
+$("luWhere").onchange = whereUI; $("luPct").oninput = updateArea; $("luBuf").oninput = updateArea;
+$("btnScen").onclick = () => runScenario(false);
+$("btnCopyCsv").onclick = () => copyText(dailyCsv(), "the daily results");
+$("btnDlCsv").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([dailyCsv()], { type: "text/csv" })); a.download = `topmodel_${st.id}.csv`; document.body.appendChild(a); a.click(); a.remove(); toast("If nothing downloaded, use Copy instead (downloads are blocked inside the hosted page)."); };
+$("btnCopyPar").onclick = () => copyText(JSON.stringify({ watershed: st.id, name: st.b.name, period: [isoDate(st.dts[0]), isoDate(st.dts[st.dts.length - 1])], pMult: st.pMult, lambda: st.lam, topography: "30 m 3DEP DEM, MD-infinity TWI, 30 classes", routing: st.route, params: st.p }, null, 2), "the parameters");
+$("btnCopyScen").onclick = () => { if (!st.scen) { toast("Run a scenario first."); return; } copyText("WY,P,Q_base,Q_scen,ET_base,ET_scen,peakQ_base,peakQ_scen\n" + st.scen.table.map(r => [r.WY, r.Pb, r.Qb, r.Qs, r.Eb, r.Es, r.Pkb, r.Pks].map(v => +v.toFixed(2)).join(",")).join("\n"), "the scenario table"); };
+$("aboutTxt").textContent = `Topographic index      TI = ln(a / tan β), grouped in 30 classes
+Local deficit          S_i = S̄ + m (λ − TI_i);  λ = mean TI
+Baseflow               Qb = exp(ln Te − λ) exp(−S̄ / m)
+Unsaturated zone       q_uz = SUZ / (S_i td)
+Root-zone ET           Ea = Edry (1 − SRZ / Srmax)
+Overland flow          saturation excess where SUZ > S_i (S_i = 0: saturated)
+Mass balance           S̄(t+1) = S̄ − Σ q_uz + Qb
+
+Penman–Monteith PET (daily, FAO-56 net radiation, G = 0):
+   E = [Δ Rn + 86400 ρ cp VPD / ra] / [Δ + γ (1 + rc / ra)] / λv
+   ra = ln((z − d)/z0m) ln((z − d)/z0h) / (k² u),  d = 2/3 hc, z0m = 0.123 hc, z0h = 0.1 z0m, z = hc + 2 m
+   rc = rl / (0.5 LAI); seasonal LAI from leaf-out / leaf-fall dates
+
+Canopy interception: capacity cint × LAI, evaporating at Ewet (PM with rc = 0);
+   Edry = PET (1 − Ei / Ewet).
+Canopy snow (form of Hedstrom & Pomeroy 1998): dI = (Imax − I)(1 − exp(−Cc P / Imax)),
+   Cc = 1 − exp(−0.5 LAI); Imax = cSnow × foliage + cSnowBr × woody area;
+   sublimates at Ewet × lv/ls, unloads at 1 − exp(−unload) per day, melts as drip.
+
+Shallow subsurface stormflow (optional; Scanlon et al. 2000): unsaturated drainage fills
+   a stormflow zone W (capacity Mssf); Qssf = kssf W; recharge kv W; surface saturates
+   where TI ≥ ln(mean a/tan β) + ln(Mssf / W); a full zone overflows as overland flow.
+
+Snow: P is snow when Tmean ≤ Tsnow; melt = DDF (Tmean − Tmelt).
+Albedo with snow: a = a0 + fsc (a_snow,eff − a0), fsc = min(SWE / SWEfull, 1),
+   a_snow,eff = a0 + (a_open − a0) exp(−k LAI).
+
+Infiltration excess (optional): each rain day falls in a storm of D hours (summer /
+   winter durations); excess = P i / (i + K), i = P/D, K = Ks (1 + factor × deficit / Srmax),
+   on unsaturated TI classes only; a share reaches the stream, the rest re-infiltrates.
+
+Impervious area (optional): impPct % of the watershed; a depression store Sdep evaporates
+   at the wet-surface rate; connected excess (fConn) reaches the stream the same day,
+   the rest runs on to the pervious area.
+
+Land-use change: the canopy area is split into an unchanged and a changed tile, each with
+   its own canopy (LAI, height → ra, albedo, interception), snowpack (DDF) and root zone
+   (Srmax) in every TI class; unsaturated, stormflow and saturated zones are shared.
+   The changed tile jumps on the change date to the start state and moves to the end state
+   (exponential, linear, step or none). Options: compacted / water-repellent soil,
+   new impervious surfaces with detention, seasonal LAI loss in outbreak years.
+
+Channel routing: time-delay histogram of channel distances / channel velocity.
+
+Calibration: SCE-UA (Duan et al. 1992, 1994) maximises the objective over the
+   calibration period; later days are the validation period.
+Fit statistics (after warm-up, days with observations): NSE, NSE of ln(Q + 0.01 mean Q),
+   KGE (Gupta et al. 2009), percent bias, correlation.`;
+// re-plot on theme change
+const mq = matchMedia("(prefers-color-scheme: dark)");
+const rethemer = () => { drawMap(); if (!$("pg-data").hidden) renderData(); renderTab(); if (!$("pg-calibrate").hidden) { renderCalFit(); drawCalTrace(calState.trace); } if (st.scen && !$("pg-scenario").hidden) renderScenario(); };
+mq.addEventListener ? mq.addEventListener("change", rethemer) : mq.addListener(rethemer);
+new MutationObserver(rethemer).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+setPreset(LU_PRESETS[0]);
+loadBasin("02017500");
+let startPage = "watershed"; try { startPage = localStorage.getItem("tmx-page") || startPage; } catch (e) {}
+if (location.hash && $("pg-" + location.hash.slice(1))) startPage = location.hash.slice(1);
+showPage(startPage);
+</script>

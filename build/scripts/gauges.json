@@ -1,0 +1,14 @@
+{
+  "virginia": ["02017500", "02028500", "02038850", "01669000"],
+  "other": ["01013500", "12040500", "11143000", "11266500", "09352900", "09512280", "08202700"],
+  "sources": {
+    "virginia": {"repo": "https://github.com/lhmygis/dP2L-models-for-CAMELS-learning.git",
+                 "forcing": "camels_data/basin_mean_forcing/daymet/02/{id}_lump_cida_forcing_leap.txt",
+                 "flow": "camels_data/usgs_streamflow/02/{id}_streamflow_qc.txt"},
+    "other": {"repo": "https://github.com/tsgebre/Flood_prediction_based_on_physics_priors.git",
+              "forcing": "data/{id}_lump_cida_forcing_leap.txt",
+              "flow": "data/{id}_streamflow_qc.txt"},
+    "attributes": {"repo": "https://github.com/NOAA-OWP/lstm.git", "dir": "data/camels_attributes_v2.0"}
+  },
+  "period": ["2004-10-01", "2014-09-30"]
+}

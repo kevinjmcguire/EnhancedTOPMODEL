@@ -1,2 +1,7 @@
 tools/cache/
 __pycache__/
+build/cache/
+build/out/
+build/scripts/node_modules/
+build/scripts/package-lock.json
+build/tests/out/

@@ -417,7 +417,7 @@ table.cal input[type="checkbox"] { accent-color: var(--accent); }
       <h3>Differences from the R app</h3>
       <ul>
         <li>Watersheds are fixed to these eleven examples; DEM delineation and the Daymet, NLCD and MODIS downloads are not available in the browser.</li>
-        <li>Topography is precomputed: 30 m 3DEP DEMs delineated at the gauges with twi_watershed_usgs.m (priority-flood, D8 watershed, MD-infinity TWI), 30 equal-width TWI classes as in the R app, and D8 channel distances to the outlet (200-bin histogram) for routing. Current River (MO) was dropped because its 4,350 km&#xb2; DEM was too large.</li>
+        <li>Topography is precomputed: 30 m 3DEP DEMs delineated at the gauges with twi_watershed_usgs.m (priority-flood, D8 watershed, MD-infinity TWI), 30 equal-width TWI classes as in the R app, and D8 channel distances to the outlet (200-bin histogram) for routing.</li>
         <li>The saturated-area map is drawn at up to 320 pixels across (one map pixel = 1&#x2013;8 DEM cells); a pixel's shade is the saturated share of its 30 m cells. Land-use change areas are placed by TWI class.</li>
         <li>DREAMzs uncertainty analysis is not included; SCE-UA is.</li>
         <li>The pre-calibrated sets come from SCE-UA (KGE, 3,000 runs, first 60% after warm-up) on m, ln Te, Srmax, td, DDF, rl and channel velocity, plus Ks with infiltration excess on for the two dryland basins.</li>
