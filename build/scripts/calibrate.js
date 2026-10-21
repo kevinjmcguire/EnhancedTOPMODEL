@@ -10,10 +10,10 @@ const p0=S.startParams(B); const arid=['08202700','09512280'].includes(id);
 if(arid){p0.ieOn=true;}
 const keys=S.CAL_KEYS.concat(arid?['Ks']:[]);
 const P=keys.map(k=>S.PBYKEY[k]); const bl=P.map(r=>r.isLog?Math.log10(r.min):r.min), bu=P.map(r=>r.isLog?Math.log10(r.max):r.max);
-const toP=x=>{const p={...p0}; keys.forEach((k,i)=>p[k]=P[i].isLog?10**x[i]:x[i]); return p;};
+const toP=x=>{const p={...p0}; keys.forEach((k,i)=>p[k]=P[i].isLog?10**x[i]:x[i]); return S.runParams(p);};
 const evalK=(q,k)=>TM.objective('KGE',k.map(t=>B.Q[t]),k.map(t=>q[t]));
 const x0=keys.map((k,i)=>P[i].isLog?Math.log10(p0[k]):p0[k]);
-const q0=TM.core(F,TI,p0,R).Qsim; const start={cal:evalK(q0,kC),val:evalK(q0,kV)};
+const q0=TM.core(F,TI,S.runParams(p0),R).Qsim; const start={cal:evalK(q0,kC),val:evalK(q0,kV)};
 const t0=Date.now();
 const r=TM.sceua(x=>1-evalK(TM.core(F,TI,toP(x),R).Qsim,kC),x0,bl,bu,LONG?{ngs:6,maxn:6000,kstop:10,pcento:0.01,seed:SEED}:{ngs:3,maxn:3000,kstop:5,pcento:0.1,seed:SEED});
 const pb=toP(r.bestx); const qb=TM.core(F,TI,pb,R).Qsim; const M=TM.perfMetrics(kV.map(t=>B.Q[t]),kV.map(t=>qb[t]));

@@ -273,8 +273,8 @@ table.cal input[type="checkbox"] { accent-color: var(--accent); }
         </div>
         <div data-v="wb" hidden><div class="plot" id="pWB" style="height:340px"></div><div class="tblwrap"><table class="t" id="tblWB"></table></div>
           <p class="note small">Water years (Oct&#x2013;Sep). Closure = P &#x2212; ET &#x2212; Q &#x2212; &#x394;S &#x2212; &#x394;channel storage; it stays at round-off (&#x2248; 0) because the model conserves mass exactly.</p></div>
-        <div data-v="et" hidden><div class="plot" id="pET" style="height:330px"></div><div class="plot" id="pETm" style="height:300px"></div><div class="plot" id="pLAI" style="height:240px"></div></div>
-        <div data-v="sto" hidden><div class="plot" id="pSnow" style="height:250px"></div><div class="plot" id="pSto" style="height:300px"></div><div class="plot" id="pSat" style="height:250px"></div></div>
+        <div data-v="et" hidden><div class="plot" id="pET" style="height:560px"></div><div class="plot" id="pETm" style="height:300px"></div></div>
+        <div data-v="sto" hidden><div class="plot" id="pSto" style="height:780px"></div></div>
         <div data-v="sat" hidden>
           <div class="satgrid">
             <figure class="satmap">
@@ -1156,8 +1156,11 @@ function startParams(b) {
 // as ti_classes() in model_utils.R, and the 200-bin channel-distance histogram used for routing.
 function realTI(tw) { return { val: tw.ti.val, frac: tw.ti.frac, lnLambdaLin: tw.ti.lnLambdaLin, lambda: tw.ti.lambda_ }; }
 function demRouting(tw) { return { on: true, dist: tw.route.dist, frac: tw.route.frac, Lmax: tw.route.max }; }
+// The initial root-zone deficit cannot exceed the root-zone capacity; otherwise the core's
+// ET clamp min(ea, Srmax - SRZ) goes negative on the first days (same in topmodel_core.R).
+function runParams(p) { return p.SR0 > p.Srmax ? Object.assign({}, p, { SR0: p.Srmax }) : p; }
 const CAL_KEYS = ["m", "lnTe", "Srmax", "td", "DDF", "rl", "chv"];
-const api = { realTI, demRouting, PARAMS, PBYKEY, META, ORDER, tiLambda, tiDist, dates, doyOf, forcing, hackRouting, defaults, startParams, CAL_KEYS };
+const api = { runParams, realTI, demRouting, PARAMS, PBYKEY, META, ORDER, tiLambda, tiDist, dates, doyOf, forcing, hackRouting, defaults, startParams, CAL_KEYS };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 root.SETUP = api;
 })(typeof self !== "undefined" ? self : this);
@@ -1226,7 +1229,7 @@ function currentForcing() { return S.forcing(st.b, st.i0, st.i1, st.pMult); }
 function run() {
   const t0 = performance.now();
   const F = currentForcing();
-  st.out = TM.core(F, st.TI, st.p, routing());
+  st.out = TM.core(F, st.TI, S.runParams(st.p), routing());
   st.F = F; st.dts = st.D.slice(st.i0, st.i1 + 1); st.obs = st.b.Q.slice(st.i0, st.i1 + 1);
   st.runMs = performance.now() - t0;
   renderModel();
@@ -1263,17 +1266,19 @@ function ax(title, extra = {}) { const line = css("--line"), ink2 = css("--ink-2
 function plot(id, traces, layout) { Plotly.react(id, traces, layout, PCFG); }
 const C = n => css("--s" + n);
 // shared zoom across time-series plots
-const TS_PLOTS = ["pHyd", "pET", "pLAI", "pSnow", "pSto", "pSat", "pData", "pScen", "pCalHyd"];
+const TS_PLOTS = ["pHyd", "pET", "pSto", "pData", "pScen", "pCalHyd"];
 let syncing = false, tWin = null;
 function hookSync(id) {
   const el = $(id); if (el._hooked) return; el._hooked = true;
   el.on("plotly_relayout", e => {
-    if (syncing) return;                     // ignore the relayouts this code itself triggers
+    if (el._expect > 0) { el._expect--; return; }   // a relayout this code itself made
+    if (syncing) return;
     if (!isDateAxis(el)) return;             // e.g. the flow duration curve
     let r = null;
     for (const k of Object.keys(e)) { const m = k.match(/^xaxis\d*\.range\[0\]$/); if (m) r = [e[k], e[k.replace("[0]", "[1]")]]; if (/^xaxis\d*\.range$/.test(k)) r = e[k]; }
     const auto = Object.keys(e).some(k => /^xaxis\d*\.autorange$/.test(k));
     if (!r && !auto) return;
+    if (auto ? !tWin : sameWin(r, tWin)) return;   // an echo of the shared window, not a new zoom
     tWin = auto ? null : r.slice();
     const others = TS_PLOTS.filter(o => o !== id && $(o).data && !$(o).closest("[hidden]"));
     syncWins(others);
@@ -1285,7 +1290,15 @@ function syncWins(ids) {
   syncing = true;
   Promise.all(ids.map(applyWin)).catch(() => {}).finally(() => { setTimeout(() => { syncing = false; }, 0); });
 }
-const tms = v => typeof v === "number" ? v : Date.parse(String(v).replace(" ", "T") + (String(v).length <= 10 ? "T00:00:00Z" : ""));
+// Plotly reports date ranges as "YYYY-MM-DD hh:mm:ss.ffff"; Safari's Date.parse rejects that form
+// (space separator, more than 3 decimals), so parse it by hand.
+function tms(v) {
+  if (typeof v === "number") return v;
+  if (v instanceof Date) return v.getTime();
+  const m = String(v).match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2})(\.\d+)?)?)?/);
+  if (!m) return NaN;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)) + (m[7] ? Math.round(parseFloat(m[7]) * 1000) : 0);
+}
 const sameWin = (a, b) => a && b && Math.abs(tms(a[0]) - tms(b[0])) < 60e3 && Math.abs(tms(a[1]) - tms(b[1])) < 60e3;
 const isDateAxis = el => !!(el._fullLayout && Object.keys(el._fullLayout).some(k => /^xaxis\d*$/.test(k) && el._fullLayout[k].type === "date"));
 function applyWin(id) {
@@ -1297,7 +1310,9 @@ function applyWin(id) {
     if (tWin) { if (!sameWin(xa.range, tWin)) upd[k + ".range"] = tWin.slice(); }
     else if (!xa.autorange) upd[k + ".autorange"] = true;
   }
-  return Object.keys(upd).length ? Plotly.relayout(id, upd) : Promise.resolve();
+  if (!Object.keys(upd).length) return Promise.resolve();
+  el._expect = (el._expect || 0) + 1;
+  return Plotly.relayout(id, upd).finally(() => setTimeout(() => { el._expect = 0; }, 400));
 }
 
 // ------------------------------------------------------------------ watershed page
@@ -1518,30 +1533,39 @@ function plotWB() {
   $("tblWB").innerHTML = `<thead><tr>${cols.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
     T.map(r => `<tr>${cols.map(c => `<td>${c[0] === "WY" ? r.WY : c[0] === "closure" ? r.closure.toExponential(1) : fmt(r[c[0]], c[2])}</td>`).join("")}</tr>`).join("") + "</tbody>";
 }
+// Stacked panels in one figure with a shared, matched time axis (Plotly zooms them together itself).
+function panels(id, groups) {
+  const n = groups.length, gap = 0.06, h = (1 - gap * (n - 1)) / n, traces = [], lay = { margin: { l: 62, r: 14, t: 34, b: 30 }, annotations: [] };
+  groups.forEach((g, i) => {
+    const k = i + 1, top = 1 - i * (h + gap), xa = "x" + (k > 1 ? k : ""), ya = "y" + (k > 1 ? k : "");
+    for (const tr of g.traces) traces.push(Object.assign({ xaxis: xa, yaxis: ya }, tr));
+    lay["xaxis" + (k > 1 ? k : "")] = ax("", Object.assign({ anchor: ya, showticklabels: i === n - 1 }, k < n ? { matches: "x" + n } : {}));
+    lay["yaxis" + (k > 1 ? k : "")] = ax(g.y, Object.assign({ domain: [Math.max(top - h, 0), top] }, g.yopt || {}));
+    lay.annotations.push({ xref: "paper", yref: "paper", x: 0, y: top, xanchor: "left", yanchor: "bottom", showarrow: false, text: g.title, font: { size: 12, color: css("--ink") } });
+  });
+  plot(id, traces, baseLayout(lay));
+  hookSync(id); syncWins([id]);
+}
 function plotET() {
-  const o = st.out, D = st.dts;
-  plot("pET", [{ x: D, y: Array.from(o.PET), type: "scatter", mode: "lines", name: "PET", line: { color: css("--ink-3"), width: 1 } },
-    { x: D, y: Array.from(o.ET), type: "scatter", mode: "lines", name: "Actual ET", line: { color: C(3), width: 1.3 } },
-    { x: D, y: Array.from(o.Ei), type: "scatter", mode: "lines", name: "Interception loss", line: { color: C(1), width: 1 } }],
-    baseLayout({ yaxis: ax("mm/d"), xaxis: ax("") }));
+  const o = st.out, D = st.dts, L = (y, name, color, w = 1, extra = {}) => Object.assign({ x: D, y: Array.from(y), type: "scatter", mode: "lines", name, line: { color, width: w } }, extra);
+  panels("pET", [
+    { title: "Evapotranspiration", y: "mm/d", traces: [L(o.PET, "PET", css("--ink-3")), L(o.ET, "Actual ET", C(3), 1.3)] },
+    { title: "Canopy interception", y: "mm/d", traces: [L(o.Ei, "Rain interception loss (Ei)", C(1), 1.2), L(o.Es, "Snow sublimation (Es)", C(5), 1.2)] },
+    { title: "Leaf area index", y: "m\u00b2/m\u00b2", traces: [L(o.LAI, "LAI", C(6), 1.5)] },
+  ]);
   const mm = new Array(12).fill(0).map(() => ({ PET: 0, Ei: 0, Es: 0, Ea: 0, P: 0, n: 0 }));
   D.forEach((d, t) => { const m = mm[d.getUTCMonth()]; m.PET += o.PET[t]; m.Ei += o.Ei[t]; m.Es += o.Es[t]; m.Ea += o.Ea[t]; m.P += st.F.P[t]; m.n++; });
   const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], f = k => mm.map(m => m[k] / m.n * 30.4);
   plot("pETm", [["P", "P", 1], ["PET", "PET", null], ["Ea", "Transpiration + soil (Ea)", 3], ["Ei", "Rain interception (Ei)", 7], ["Es", "Snow sublimation (Es)", 5]].map(([k, nm, c]) =>
     ({ x: mon, y: f(k), type: "bar", name: nm, marker: { color: c ? C(c) : css("--ink-3") } })), baseLayout({ barmode: "group", bargap: 0.2, yaxis: ax("Monthly mean, mm/month") }));
-  plot("pLAI", [{ x: D, y: Array.from(o.LAI), type: "scatter", mode: "lines", name: "LAI", line: { color: C(6), width: 1.5 } }], baseLayout({ yaxis: ax("LAI (m\u00b2/m\u00b2)"), showlegend: false }));
-  ["pET", "pLAI"].forEach(hookSync); syncWins(["pET", "pLAI"]);
 }
 function plotSto() {
-  const o = st.out, D = st.dts;
-  plot("pSnow", [{ x: D, y: Array.from(o.SWE), type: "scatter", mode: "lines", name: "Snowpack SWE", line: { color: C(1), width: 1.5 }, fill: "tozeroy", fillcolor: "rgba(42,120,214,0.12)" },
-    { x: D, y: Array.from(o.Csnow), type: "scatter", mode: "lines", name: "Canopy snow", line: { color: C(7), width: 1 } }], baseLayout({ yaxis: ax("mm") }));
-  plot("pSto", [{ x: D, y: Array.from(o.Sbar), type: "scatter", mode: "lines", name: "Mean saturated-zone deficit S\u0304", line: { color: C(2), width: 1.5 } },
-    { x: D, y: Array.from(o.SRZ), type: "scatter", mode: "lines", name: "Root-zone deficit", line: { color: C(3), width: 1.2 } },
-    { x: D, y: Array.from(o.SUZ), type: "scatter", mode: "lines", name: "Unsaturated-zone storage", line: { color: C(7), width: 1 } }], baseLayout({ yaxis: ax("mm") }));
-  plot("pSat", [{ x: D, y: Array.from(o.satFrac, v => v * 100), type: "scatter", mode: "lines", name: "Saturated area", line: { color: C(1), width: 1.3 }, fill: "tozeroy", fillcolor: "rgba(42,120,214,0.12)" }],
-    baseLayout({ yaxis: ax("% of watershed"), showlegend: false }));
-  ["pSnow", "pSto", "pSat"].forEach(hookSync); syncWins(["pSnow", "pSto", "pSat"]);
+  const o = st.out, D = st.dts, L = (y, name, color, w = 1, extra = {}) => Object.assign({ x: D, y: Array.from(y), type: "scatter", mode: "lines", name, line: { color, width: w } }, extra);
+  panels("pSto", [
+    { title: "Snow", y: "mm", traces: [L(o.SWE, "Snowpack SWE", C(7), 1.5, { fill: "tozeroy", fillcolor: "rgba(98,80,214,0.12)" }), L(o.Csnow, "Canopy snow", C(5))] },
+    { title: "Soil-water storage and deficits", y: "mm", traces: [L(o.Sbar, "Mean saturated-zone deficit S\u0304", C(2), 1.5), L(o.SRZ, "Root-zone deficit", C(3), 1.2), L(o.SUZ, "Unsaturated-zone storage", C(7))] },
+    { title: "Saturated area", y: "% of watershed", traces: [L(Array.from(o.satFrac, v => v * 100), "Saturated area", css("--sat"), 1.3, { fill: "tozeroy", fillcolor: "rgba(31,111,209,0.12)" })], yopt: { rangemode: "tozero" } },
+  ]);
 }
 function satThreshold(t) {
   const o = st.out; let thr = o.lambda + (o.Sbar[t] / 1000) / st.p.m;
@@ -1673,7 +1697,7 @@ self.onmessage = function (e) {
   const pIdx = J.kC;
   const obs = pIdx.map(t => J.obs[t]);
   let nev = 0, best = -Infinity, trace = [], lastPost = 0;
-  const toP = x => { const p = Object.assign({}, J.p); J.keys.forEach((k, i) => p[k] = J.islog[i] ? Math.pow(10, x[i]) : x[i]); return p; };
+  const toP = x => { const p = Object.assign({}, J.p); J.keys.forEach((k, i) => p[k] = J.islog[i] ? Math.pow(10, x[i]) : x[i]); if (p.SR0 > p.Srmax) p.SR0 = p.Srmax; return p; };
   const fun = x => {
     const q = TM.core(J.F, J.TI, toP(x), J.R).Qsim;
     let v = TM.objective(J.obj, obs, pIdx.map(t => q[t]));
@@ -1851,8 +1875,8 @@ function runScenario(quiet) {
   const F = currentForcing(), R = routing(), dts = st.dts, { lu, preIsBase, tH } = buildLuc(F, dts);
   if (lu.tIdx < 1 || lu.tIdx > dts.length) { $("scenMsg").textContent = "The date of change must fall inside the simulation period."; return; }
   const t0 = performance.now();
-  const pS = Object.assign({}, st.p, { luc: lu }), sc = TM.core(F, st.TI, pS, R);
-  const base = preIsBase ? st.out : TM.core(F, st.TI, Object.assign({}, st.p, { luc: Object.assign({}, lu, { change: false, laiMult: null }) }), R);
+  const pS = Object.assign({}, S.runParams(st.p), { luc: lu }), sc = TM.core(F, st.TI, pS, R);
+  const base = preIsBase ? st.out : TM.core(F, st.TI, Object.assign({}, S.runParams(st.p), { luc: Object.assign({}, lu, { change: false, laiMult: null }) }), R);
   st.scen = { sc, base, tIdx: lu.tIdx - 1, tH, frac: sc.lucFrac };
   $("scenMsg").textContent = `Ran baseline and scenario in ${(performance.now() - t0).toFixed(0)} ms. Changed tile: ${(100 * sc.lucFrac).toFixed(0)}% of the watershed.` + (preIsBase ? "" : " The baseline also uses the land use before the change on that area.");
   renderScenario();

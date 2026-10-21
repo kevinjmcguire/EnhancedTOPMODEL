@@ -135,8 +135,11 @@ function startParams(b) {
 // as ti_classes() in model_utils.R, and the 200-bin channel-distance histogram used for routing.
 function realTI(tw) { return { val: tw.ti.val, frac: tw.ti.frac, lnLambdaLin: tw.ti.lnLambdaLin, lambda: tw.ti.lambda_ }; }
 function demRouting(tw) { return { on: true, dist: tw.route.dist, frac: tw.route.frac, Lmax: tw.route.max }; }
+// The initial root-zone deficit cannot exceed the root-zone capacity; otherwise the core's
+// ET clamp min(ea, Srmax - SRZ) goes negative on the first days (same in topmodel_core.R).
+function runParams(p) { return p.SR0 > p.Srmax ? Object.assign({}, p, { SR0: p.Srmax }) : p; }
 const CAL_KEYS = ["m", "lnTe", "Srmax", "td", "DDF", "rl", "chv"];
-const api = { realTI, demRouting, PARAMS, PBYKEY, META, ORDER, tiLambda, tiDist, dates, doyOf, forcing, hackRouting, defaults, startParams, CAL_KEYS };
+const api = { runParams, realTI, demRouting, PARAMS, PBYKEY, META, ORDER, tiLambda, tiDist, dates, doyOf, forcing, hackRouting, defaults, startParams, CAL_KEYS };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
 root.SETUP = api;
 })(typeof self !== "undefined" ? self : this);
