@@ -531,20 +531,36 @@ let syncing = false, tWin = null;
 function hookSync(id) {
   const el = $(id); if (el._hooked) return; el._hooked = true;
   el.on("plotly_relayout", e => {
-    if (syncing) return;
+    if (syncing) return;                     // ignore the relayouts this code itself triggers
+    if (!isDateAxis(el)) return;             // e.g. the flow duration curve
     let r = null;
     for (const k of Object.keys(e)) { const m = k.match(/^xaxis\d*\.range\[0\]$/); if (m) r = [e[k], e[k.replace("[0]", "[1]")]]; if (/^xaxis\d*\.range$/.test(k)) r = e[k]; }
     const auto = Object.keys(e).some(k => /^xaxis\d*\.autorange$/.test(k));
     if (!r && !auto) return;
-    tWin = auto ? null : r; syncing = true;
-    for (const o of TS_PLOTS) if (o !== id && $(o).data && !$(o).closest("[hidden]")) applyWin(o);
-    syncing = false;
+    tWin = auto ? null : r.slice();
+    const others = TS_PLOTS.filter(o => o !== id && $(o).data && !$(o).closest("[hidden]"));
+    syncWins(others);
   });
 }
+// Apply the shared window to several plots; hold the guard until Plotly has finished (its
+// relayout events fire asynchronously), so plots do not keep re-zooming each other.
+function syncWins(ids) {
+  syncing = true;
+  Promise.all(ids.map(applyWin)).catch(() => {}).finally(() => { setTimeout(() => { syncing = false; }, 0); });
+}
+const tms = v => typeof v === "number" ? v : Date.parse(String(v).replace(" ", "T") + (String(v).length <= 10 ? "T00:00:00Z" : ""));
+const sameWin = (a, b) => a && b && Math.abs(tms(a[0]) - tms(b[0])) < 60e3 && Math.abs(tms(a[1]) - tms(b[1])) < 60e3;
+const isDateAxis = el => !!(el._fullLayout && Object.keys(el._fullLayout).some(k => /^xaxis\d*$/.test(k) && el._fullLayout[k].type === "date"));
 function applyWin(id) {
-  const el = $(id); if (!el.layout) return;
-  const upd = {}; for (const k of Object.keys(el.layout)) if (/^xaxis\d*$/.test(k)) { if (tWin) upd[k + ".range"] = tWin.slice(); else upd[k + ".autorange"] = true; }
-  Plotly.relayout(id, upd);
+  const el = $(id); if (!el.layout || !isDateAxis(el)) return Promise.resolve();
+  const upd = {};
+  for (const k of Object.keys(el.layout)) if (/^xaxis\d*$/.test(k)) {
+    const xa = el.layout[k];
+    if (xa.matches) continue;                // matched axes follow their partner
+    if (tWin) { if (!sameWin(xa.range, tWin)) upd[k + ".range"] = tWin.slice(); }
+    else if (!xa.autorange) upd[k + ".autorange"] = true;
+  }
+  return Object.keys(upd).length ? Plotly.relayout(id, upd) : Promise.resolve();
 }
 
 // ------------------------------------------------------------------ watershed page
@@ -738,7 +754,7 @@ function plotHyd() {
   plot("pHyd", tr, baseLayout({ xaxis: ax("", { anchor: "y", showticklabels: false, matches: "x2" }), xaxis2: ax("", { anchor: "y2" }),
     yaxis: ax("P (mm/d)", { domain: [0.8, 1], autorange: "reversed" }), yaxis2: ax("Q (mm/d)", { domain: [0, 0.74], type: log ? "log" : "linear" }),
     bargap: 0, margin: { l: 58, r: 14, t: 28, b: 30 }, legend: { orientation: "h", y: 1.07, x: 0 } }));
-  hookSync("pHyd"); if (tWin) applyWin("pHyd");
+  hookSync("pHyd"); syncWins(["pHyd"]);
 }
 function wyTable(o, F, extraObs = true) {
   const D = st.dts, pr = periods(), map = new Map();
@@ -777,7 +793,7 @@ function plotET() {
   plot("pETm", [["P", "P", 1], ["PET", "PET", null], ["Ea", "Transpiration + soil (Ea)", 3], ["Ei", "Rain interception (Ei)", 7], ["Es", "Snow sublimation (Es)", 5]].map(([k, nm, c]) =>
     ({ x: mon, y: f(k), type: "bar", name: nm, marker: { color: c ? C(c) : css("--ink-3") } })), baseLayout({ barmode: "group", bargap: 0.2, yaxis: ax("Monthly mean, mm/month") }));
   plot("pLAI", [{ x: D, y: Array.from(o.LAI), type: "scatter", mode: "lines", name: "LAI", line: { color: C(6), width: 1.5 } }], baseLayout({ yaxis: ax("LAI (m²/m²)"), showlegend: false }));
-  ["pET", "pLAI"].forEach(i => { hookSync(i); if (tWin) applyWin(i); });
+  ["pET", "pLAI"].forEach(hookSync); syncWins(["pET", "pLAI"]);
 }
 function plotSto() {
   const o = st.out, D = st.dts;
@@ -788,7 +804,7 @@ function plotSto() {
     { x: D, y: Array.from(o.SUZ), type: "scatter", mode: "lines", name: "Unsaturated-zone storage", line: { color: C(7), width: 1 } }], baseLayout({ yaxis: ax("mm") }));
   plot("pSat", [{ x: D, y: Array.from(o.satFrac, v => v * 100), type: "scatter", mode: "lines", name: "Saturated area", line: { color: C(1), width: 1.3 }, fill: "tozeroy", fillcolor: "rgba(42,120,214,0.12)" }],
     baseLayout({ yaxis: ax("% of watershed"), showlegend: false }));
-  ["pSnow", "pSto", "pSat"].forEach(i => { hookSync(i); if (tWin) applyWin(i); });
+  ["pSnow", "pSto", "pSat"].forEach(hookSync); syncWins(["pSnow", "pSto", "pSat"]);
 }
 function satThreshold(t) {
   const o = st.out; let thr = o.lambda + (o.Sbar[t] / 1000) / st.p.m;
